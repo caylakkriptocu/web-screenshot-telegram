@@ -2,6 +2,7 @@ const puppeteer = require('puppeteer');
 const axios = require('axios');
 const fs = require('fs');
 const FormData = require('form-data');
+const Tesseract = require('tesseract.js'); // OCR için Tesseract.js kullanıyoruz
 
 // Ortam değişkenlerinden Telegram bilgilerini al
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -84,8 +85,28 @@ function delay(ms) {
         try {
           const [element] = await page.$x(site.textXPath);
           if (element) {
-            description = await page.evaluate(el => el.textContent, element);
-            console.log(`Açıklama metni alındı: ${description}`);
+            // Öğenin konumunu al
+            const boundingBox = await element.boundingBox();
+            if (boundingBox) {
+              const { x, y, width, height } = boundingBox;
+              // Öğenin ekran görüntüsünü al
+              const screenshotBuffer = await page.screenshot({
+                clip: {
+                  x: Math.max(x, 0),
+                  y: Math.max(y, 0),
+                  width: Math.min(width, page.viewport().width - x),
+                  height: Math.min(height, page.viewport().height - y),
+                }
+              });
+
+              // OCR ile metni al
+              const { data: { text } } = await Tesseract.recognize(screenshotBuffer, 'tur');
+
+              description = text.trim();
+              console.log(`Açıklama metni alındı: ${description}`);
+            } else {
+              console.error('Öğenin bounding box bilgisi alınamadı.');
+            }
           }
         } catch (e) {
           console.error(`Açıklama metni alınamadı: ${e.message}`);
