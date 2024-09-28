@@ -12,12 +12,14 @@ const SITES = [
   {
     url: 'https://sosovalue.com/assets/etf/Total_Crypto_Spot_ETF_Fund_Flow?page=usBTC',
     messageTemplate: 'BTC ETF ({{datetime}}) GİRİŞLERİ',
-    identifier: 'usBTC'
+    identifier: 'usBTC',
+    waitForXPath: '//span[contains(@class, "text-neutral-fg-2-rest") and contains(text(), "Total Bitcoin Spot ETF Net Inflow")]'
   },
   {
     url: 'https://sosovalue.com/assets/etf/Total_Crypto_Spot_ETF_Fund_Flow?page=usETH',
     messageTemplate: 'ETHHETF ({{datetime}}) GİRİŞLERİ',
-    identifier: 'usETH'
+    identifier: 'usETH',
+    waitForXPath: '//span[contains(@class, "text-neutral-fg-2-rest") and contains(text(), "Total Ethereum Spot ETF Net Inflow")]'
   }
 ];
 
@@ -33,28 +35,47 @@ function getFormattedDateTime() {
   const minutes = String(date.getMinutes()).padStart(2, '0');
   const seconds = String(date.getSeconds()).padStart(2, '0');
 
-  return ${year}-${month}-${day}_${hours}-${minutes}-${seconds};
+  return `${year}-${month}-${day}_${hours}-${minutes}-${seconds}`;
 }
 
-// 20 saniye gecikme fonksiyonu
+// 10 saniye gecikme fonksiyonu
 function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 (async () => {
-  try {
-    // Puppeteer ile tarayıcıyı başlat
-    const browser = await puppeteer.launch({
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    });
+  for (const site of SITES) {
+    let browser;
+    try {
+      // Yeni bir tarayıcı başlat
+      browser = await puppeteer.launch({
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        // headless: false, // Geliştirme sırasında sayfanın nasıl render edildiğini görmek için devre dışı bırakabilirsiniz
+      });
 
-    for (const site of SITES) {
       const page = await browser.newPage();
+      await page.setViewport({ width: 1280, height: 800 }); // Viewport ayarları
+
       await page.goto(site.url, { waitUntil: 'networkidle2' });
+
+      // Belirli bir öğeyi bekleme (XPath kullanarak)
+      if (site.waitForXPath) {
+        try {
+          await page.waitForXPath(site.waitForXPath, { timeout: 60000 }); // 60 saniye timeout
+        } catch (e) {
+          console.error(`Belirtilen öğe bulunamadı: ${site.waitForXPath} için ${site.identifier}`);
+          await page.close();
+          await browser.close();
+          continue; // Bir sonraki siteye geç
+        }
+      } else {
+        // Eğer belirli bir öğe yoksa, ek bir bekleme süresi ekleyin
+        await page.waitForTimeout(5000); // 5 saniye bekleme
+      }
 
       // Dinamik dosya adı oluştur
       const formattedDateTime = getFormattedDateTime();
-      const SCREENSHOT_PATH = screenshot_${site.identifier}_${formattedDateTime}.png;
+      const SCREENSHOT_PATH = `screenshot_${site.identifier}_${formattedDateTime}.png`;
 
       // Ekran görüntüsünü al ve kaydet
       await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
@@ -71,7 +92,7 @@ function delay(ms) {
 
       // Ekran görüntüsünü Telegram'a gönder
       const response = await axios.post(
-        https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto,
+        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`,
         formData,
         {
           headers: formData.getHeaders(),
@@ -79,20 +100,24 @@ function delay(ms) {
       );
 
       if (response.data.ok) {
-        console.log(Ekran görüntüsü başarıyla gönderildi: ${SCREENSHOT_PATH});
+        console.log(`Ekran görüntüsü başarıyla gönderildi: ${SCREENSHOT_PATH}`);
       } else {
         console.error('Telegram API hatası:', response.data);
       }
 
       // Geçici dosyayı sil (isteğe bağlı)
       fs.unlinkSync(SCREENSHOT_PATH);
-
-      // 20 saniye gecikme
-      await delay(20000); // 20000 milisaniye = 20 saniye
+    } catch (error) {
+      console.error(`Hata oluştu: ${error.message}`);
+    } finally {
+      if (browser) {
+        await browser.close();
+      }
     }
 
-    await browser.close();
-  } catch (error) {
-    console.error('Hata oluştu:', error);
+    // 10 saniye gecikme (son site değilse)
+    if (site !== SITES[SITES.length - 1]) {
+      await delay(10000); // 10000 milisaniye = 10 saniye
+    }
   }
 })();
