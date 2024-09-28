@@ -46,3 +46,4 @@ const SCREENSHOT_PATH = 'screenshot.png';
     console.error('Hata oluştu:', error);
   }
 })();
+ 
