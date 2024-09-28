@@ -1,0 +1,13 @@
+{
+  "name": "web-screenshot-telegram",
+  "version": "1.0.0",
+  "description": "Daily screenshot and send to Telegram",
+  "main": "send_screenshot.js",
+  "scripts": {
+    "start": "node send_screenshot.js"
+  },
+  "dependencies": {
+    "axios": "^1.4.0",
+    "puppeteer": "^19.11.1"
+  }
+}
