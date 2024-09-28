@@ -2,7 +2,6 @@ const puppeteer = require('puppeteer');
 const axios = require('axios');
 const fs = require('fs');
 const FormData = require('form-data');
-const Tesseract = require('tesseract.js'); // OCR için Tesseract.js kullanıyoruz
 
 // Ortam değişkenlerinden Telegram bilgilerini al
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -12,21 +11,21 @@ const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 const SITES = [
   {
     url: 'https://sosovalue.com/assets/etf/Total_Crypto_Spot_ETF_Fund_Flow?page=usBTC',
-    messageTemplate: '<b>BTC ETF</b> ({{datetime}}) GİRİŞLERİ\n{{url}}\n<strong>Açıklama:</strong> {{description}}',
+    messageTemplate: '<b>BTC ETF</b> ({{datetime}})\n{{url}}\n<strong>Günlük Net Giriş:</strong> {{description}}',
     identifier: 'usBTC',
     // Sayfanın tamamen yüklendiğini doğrulamak için önemli bir öğenin XPath'i
-    waitForXPath: '//span[contains(@class, "text-neutral-fg-2-rest") and contains(text(), "Total Bitcoin Spot ETF Net Inflow")]',
+    waitForXPath: '//span[contains(text(), "Total Bitcoin Spot ETF Net Inflow")]',
     // Metni almak istediğiniz öğenin XPath'i
-    textXPath: '//span[contains(@class, "text-neutral-fg-2-rest") and contains(text(), "Total Bitcoin Spot ETF Net Inflow")]'
+    textXPath: '//span[contains(@class, "text-base") and contains(@class, "font-bold") and contains(@class, "text-neutral-fg-2-rest")]'
   },
   {
     url: 'https://sosovalue.com/assets/etf/Total_Crypto_Spot_ETF_Fund_Flow?page=usETH',
-    messageTemplate: '<b>ETH ETF</b> ({{datetime}}) GİRİŞLERİ\n{{url}}\n<strong>Açıklama:</strong> {{description}}',
+    messageTemplate: '<b>ETH ETF</b> ({{datetime}})\n{{url}}\n<strong>Günlük Net Giriş:</strong> {{description}}',
     identifier: 'usETH',
     // Sayfanın tamamen yüklendiğini doğrulamak için önemli bir öğenin XPath'i
-    waitForXPath: '//span[contains(@class, "text-neutral-fg-2-rest") and contains(text(), "Total Ethereum Spot ETF Net Inflow")]',
+    waitForXPath: '//span[contains(text(), "Total Ethereum Spot ETF Net Inflow")]',
     // Metni almak istediğiniz öğenin XPath'i
-    textXPath: '//span[contains(@class, "text-neutral-fg-2-rest") and contains(text(), "Total Ethereum Spot ETF Net Inflow")]'
+    textXPath: '//span[contains(@class, "text-base") and contains(@class, "font-bold") and contains(@class, "text-neutral-fg-2-rest")]'
   }
 ];
 
@@ -85,28 +84,10 @@ function delay(ms) {
         try {
           const [element] = await page.$x(site.textXPath);
           if (element) {
-            // Öğenin konumunu al
-            const boundingBox = await element.boundingBox();
-            if (boundingBox) {
-              const { x, y, width, height } = boundingBox;
-              // Öğenin ekran görüntüsünü al
-              const screenshotBuffer = await page.screenshot({
-                clip: {
-                  x: Math.max(x, 0),
-                  y: Math.max(y, 0),
-                  width: Math.min(width, page.viewport().width - x),
-                  height: Math.min(height, page.viewport().height - y),
-                }
-              });
-
-              // OCR ile metni al
-              const { data: { text } } = await Tesseract.recognize(screenshotBuffer, 'tur');
-
-              description = text.trim();
-              console.log(`Açıklama metni alındı: ${description}`);
-            } else {
-              console.error('Öğenin bounding box bilgisi alınamadı.');
-            }
+            // Öğenin metnini al
+            description = await page.evaluate(el => el.textContent, element);
+            description = description.trim();
+            console.log(`Açıklama metni alındı: ${description}`);
           }
         } catch (e) {
           console.error(`Açıklama metni alınamadı: ${e.message}`);
