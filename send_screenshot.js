@@ -12,15 +12,12 @@ const SITES = [
   {
     url: 'https://sosovalue.com/assets/etf/Total_Crypto_Spot_ETF_Fund_Flow?page=usBTC',
     messageTemplate: 'BTC ETF ({{datetime}}) GİRİŞLERİ',
-    identifier: 'usBTC',
-    // Sayfanın tamamen yüklendiğini doğrulamak için önemli bir öğenin CSS seçicisi
-    waitForSelector: '.btc-data-table' // Bu seçiciyi sayfanın gerçek bir öğesi ile değiştirin
+    identifier: 'usBTC'
   },
   {
     url: 'https://sosovalue.com/assets/etf/Total_Crypto_Spot_ETF_Fund_Flow?page=usETH',
     messageTemplate: 'ETHHETF ({{datetime}}) GİRİŞLERİ',
-    identifier: 'usETH',
-    waitForSelector: '.eth-data-table' // Bu seçiciyi sayfanın gerçek bir öğesi ile değiştirin
+    identifier: 'usETH'
   }
 ];
 
@@ -36,47 +33,28 @@ function getFormattedDateTime() {
   const minutes = String(date.getMinutes()).padStart(2, '0');
   const seconds = String(date.getSeconds()).padStart(2, '0');
 
-  return `${year}-${month}-${day}_${hours}-${minutes}-${seconds}`;
+  return ${year}-${month}-${day}_${hours}-${minutes}-${seconds};
 }
 
-// 10 saniye gecikme fonksiyonu
+// 20 saniye gecikme fonksiyonu
 function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 (async () => {
-  for (const site of SITES) {
-    let browser;
-    try {
-      // Yeni bir tarayıcı başlat
-      browser = await puppeteer.launch({
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-        // headless: false, // Geliştirme sırasında sayfanın nasıl render edildiğini görmek için devre dışı bırakabilirsiniz
-      });
+  try {
+    // Puppeteer ile tarayıcıyı başlat
+    const browser = await puppeteer.launch({
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
 
+    for (const site of SITES) {
       const page = await browser.newPage();
-      await page.setViewport({ width: 1280, height: 800 }); // Viewport ayarları
       await page.goto(site.url, { waitUntil: 'networkidle2' });
-
-      // Belirli bir öğeyi bekleme (varsa)
-      if (site.waitForSelector) {
-        try {
-          await page.waitForSelector(site.waitForSelector, { timeout: 60000 }); // 60 saniye timeout
-        } catch (e) {
-          console.error(`Belirtilen öğe bulunamadı: ${site.waitForSelector} için ${site.identifier}`);
-          // Eğer öğe bulunamazsa, ekran görüntüsü almayı denemek yerine sonraki siteye geçebiliriz
-          await page.close();
-          await browser.close();
-          continue;
-        }
-      } else {
-        // Eğer belirli bir öğe yoksa, ek bir bekleme süresi ekleyin
-        await page.waitForTimeout(5000); // 5 saniye bekleme
-      }
 
       // Dinamik dosya adı oluştur
       const formattedDateTime = getFormattedDateTime();
-      const SCREENSHOT_PATH = `screenshot_${site.identifier}_${formattedDateTime}.png`;
+      const SCREENSHOT_PATH = screenshot_${site.identifier}_${formattedDateTime}.png;
 
       // Ekran görüntüsünü al ve kaydet
       await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
@@ -93,7 +71,7 @@ function delay(ms) {
 
       // Ekran görüntüsünü Telegram'a gönder
       const response = await axios.post(
-        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`,
+        https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto,
         formData,
         {
           headers: formData.getHeaders(),
@@ -101,22 +79,20 @@ function delay(ms) {
       );
 
       if (response.data.ok) {
-        console.log(`Ekran görüntüsü başarıyla gönderildi: ${SCREENSHOT_PATH}`);
+        console.log(Ekran görüntüsü başarıyla gönderildi: ${SCREENSHOT_PATH});
       } else {
         console.error('Telegram API hatası:', response.data);
       }
 
       // Geçici dosyayı sil (isteğe bağlı)
       fs.unlinkSync(SCREENSHOT_PATH);
-    } catch (error) {
-      console.error(`Hata oluştu: ${error.message}`);
-    } finally {
-      if (browser) {
-        await browser.close();
-      }
+
+      // 20 saniye gecikme
+      await delay(20000); // 20000 milisaniye = 20 saniye
     }
 
-    // 10 saniye gecikme
-    await delay(10000); // 10000 milisaniye = 10 saniye
+    await browser.close();
+  } catch (error) {
+    console.error('Hata oluştu:', error);
   }
 })();
