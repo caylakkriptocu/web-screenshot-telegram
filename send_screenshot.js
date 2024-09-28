@@ -11,14 +11,14 @@ const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 const SITES = [
   {
     url: 'https://sosovalue.com/assets/etf/Total_Crypto_Spot_ETF_Fund_Flow?page=usBTC',
-    messageTemplate: 'BTC ETF ({{datetime}}) GİRİŞLERİ',
+    messageTemplate: '<b>BTC ETF</b> ({{datetime}}) GİRİŞLERİ\n{{url}}',
     identifier: 'usBTC',
     // Sayfanın tamamen yüklendiğini doğrulamak için önemli bir öğenin XPath'i
     waitForXPath: '//span[contains(@class, "text-neutral-fg-2-rest") and contains(text(), "Total Bitcoin Spot ETF Net Inflow")]'
   },
   {
     url: 'https://sosovalue.com/assets/etf/Total_Crypto_Spot_ETF_Fund_Flow?page=usETH',
-    messageTemplate: 'ETHHETF ({{datetime}}) GİRİŞLERİ',
+    messageTemplate: '<b>ETH ETF</b> ({{datetime}}) GİRİŞLERİ\n{{url}}',
     identifier: 'usETH',
     // Sayfanın tamamen yüklendiğini doğrulamak için önemli bir öğenin XPath'i
     waitForXPath: '//span[contains(@class, "text-neutral-fg-2-rest") and contains(text(), "Total Ethereum Spot ETF Net Inflow")]'
@@ -83,13 +83,16 @@ function delay(ms) {
       await page.close();
 
       // Mesaj içeriğini oluştur
-      const message = site.messageTemplate.replace('{{datetime}}', new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }));
+      const message = site.messageTemplate
+        .replace('{{datetime}}', new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }))
+        .replace('{{url}}', site.url);
 
       // Telegram'a gönderilecek form data
       const formData = new FormData();
       formData.append('chat_id', TELEGRAM_CHAT_ID);
       formData.append('photo', fs.createReadStream(SCREENSHOT_PATH));
       formData.append('caption', message); // Mesajı ekle
+      formData.append('parse_mode', 'HTML'); // HTML formatında mesaj göndermek için
 
       // Ekran görüntüsünü Telegram'a gönder
       const response = await axios.post(
