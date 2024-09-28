@@ -12,12 +12,14 @@ const SITES = [
   {
     url: 'https://sosovalue.com/assets/etf/Total_Crypto_Spot_ETF_Fund_Flow?page=usBTC',
     messageTemplate: 'BTC ETF ({{datetime}}) GİRİŞLERİ',
-    identifier: 'usBTC'
+    identifier: 'usBTC',
+    waitForSelector: '.some-selector-btc' // BTC sayfasındaki önemli bir öğenin CSS seçici
   },
   {
     url: 'https://sosovalue.com/assets/etf/Total_Crypto_Spot_ETF_Fund_Flow?page=usETH',
     messageTemplate: 'ETHHETF ({{datetime}}) GİRİŞLERİ',
-    identifier: 'usETH'
+    identifier: 'usETH',
+    waitForSelector: '.some-selector-eth' // ETH sayfasındaki önemli bir öğenin CSS seçici
   }
 ];
 
@@ -51,6 +53,21 @@ function delay(ms) {
     for (const site of SITES) {
       const page = await browser.newPage();
       await page.goto(site.url, { waitUntil: 'networkidle2' });
+
+      // Belirli bir öğeyi bekleme (varsa)
+      if (site.waitForSelector) {
+        try {
+          await page.waitForSelector(site.waitForSelector, { timeout: 60000 });
+        } catch (e) {
+          console.error(`Belirtilen öğe bulunamadı: ${site.waitForSelector} için ${site.identifier}`);
+          // Eğer öğe bulunamazsa, ekran görüntüsü almayı denemek yerine sonraki siteye geçebiliriz
+          await page.close();
+          continue;
+        }
+      } else {
+        // Eğer belirli bir öğe yoksa, ek bir bekleme süresi ekleyin
+        await page.waitForTimeout(5000); // 5 saniye bekleme
+      }
 
       // Dinamik dosya adı oluştur
       const formattedDateTime = getFormattedDateTime();
