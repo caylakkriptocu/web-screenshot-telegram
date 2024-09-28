@@ -15,13 +15,13 @@ const SITES = [
     identifier: 'usBTC',
     // Burada sayfanın tamamen yüklendiğini doğrulamak için önemli bir öğenin CSS seçicisini ekleyin
     // Örneğin, sayfadaki bir tablo veya grafik olabilir
-    waitForSelector: '.btc-data-table' // Bu seçiciyi sayfanın gerçek bir öğesi ile değiştirin
+    waitForSelector: 'BTC' // Bu seçiciyi sayfanın gerçek bir öğesi ile değiştirin
   },
   {
     url: 'https://sosovalue.com/assets/etf/Total_Crypto_Spot_ETF_Fund_Flow?page=usETH',
     messageTemplate: 'ETHHETF ({{datetime}}) GİRİŞLERİ',
     identifier: 'usETH',
-    waitForSelector: '.eth-data-table' // Bu seçiciyi sayfanın gerçek bir öğesi ile değiştirin
+    waitForSelector: 'ETH' // Bu seçiciyi sayfanın gerçek bir öğesi ile değiştirin
   }
 ];
 
