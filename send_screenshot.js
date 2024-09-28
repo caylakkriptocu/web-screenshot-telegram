@@ -13,12 +13,14 @@ const SITES = [
     url: 'https://sosovalue.com/assets/etf/Total_Crypto_Spot_ETF_Fund_Flow?page=usBTC',
     messageTemplate: 'BTC ETF ({{datetime}}) GİRİŞLERİ',
     identifier: 'usBTC',
+    // Sayfanın tamamen yüklendiğini doğrulamak için önemli bir öğenin XPath'i
     waitForXPath: '//span[contains(@class, "text-neutral-fg-2-rest") and contains(text(), "Total Bitcoin Spot ETF Net Inflow")]'
   },
   {
     url: 'https://sosovalue.com/assets/etf/Total_Crypto_Spot_ETF_Fund_Flow?page=usETH',
     messageTemplate: 'ETHHETF ({{datetime}}) GİRİŞLERİ',
     identifier: 'usETH',
+    // Sayfanın tamamen yüklendiğini doğrulamak için önemli bir öğenin XPath'i
     waitForXPath: '//span[contains(@class, "text-neutral-fg-2-rest") and contains(text(), "Total Ethereum Spot ETF Net Inflow")]'
   }
 ];
@@ -62,11 +64,10 @@ function delay(ms) {
       if (site.waitForXPath) {
         try {
           await page.waitForXPath(site.waitForXPath, { timeout: 60000 }); // 60 saniye timeout
+          console.log(`Belirtilen öğe bulundu: ${site.identifier}`);
         } catch (e) {
           console.error(`Belirtilen öğe bulunamadı: ${site.waitForXPath} için ${site.identifier}`);
-          await page.close();
-          await browser.close();
-          continue; // Bir sonraki siteye geç
+          // Öğeyi bulamasa bile ekran görüntüsünü almaya devam ediyoruz
         }
       } else {
         // Eğer belirli bir öğe yoksa, ek bir bekleme süresi ekleyin
