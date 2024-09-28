@@ -13,13 +13,13 @@ const SITES = [
     url: 'https://sosovalue.com/assets/etf/Total_Crypto_Spot_ETF_Fund_Flow?page=usBTC',
     messageTemplate: 'BTC ETF ({{datetime}}) GİRİŞLERİ',
     identifier: 'usBTC',
-    waitForSelector: '.some-selector-btc' // BTC sayfasındaki önemli bir öğenin CSS seçici
+    waitForSelector: '.btc-data-table' // BTC sayfasındaki önemli bir öğenin CSS seçici
   },
   {
     url: 'https://sosovalue.com/assets/etf/Total_Crypto_Spot_ETF_Fund_Flow?page=usETH',
     messageTemplate: 'ETHHETF ({{datetime}}) GİRİŞLERİ',
     identifier: 'usETH',
-    waitForSelector: '.some-selector-eth' // ETH sayfasındaki önemli bir öğenin CSS seçici
+    waitForSelector: '.eth-data-table' // ETH sayfasındaki önemli bir öğenin CSS seçici
   }
 ];
 
@@ -38,7 +38,7 @@ function getFormattedDateTime() {
   return `${year}-${month}-${day}_${hours}-${minutes}-${seconds}`;
 }
 
-// 20 saniye gecikme fonksiyonu
+// 10 saniye gecikme fonksiyonu
 function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -52,6 +52,7 @@ function delay(ms) {
 
     for (const site of SITES) {
       const page = await browser.newPage();
+      await page.setViewport({ width: 1280, height: 800 }); // Viewport ayarları
       await page.goto(site.url, { waitUntil: 'networkidle2' });
 
       // Belirli bir öğeyi bekleme (varsa)
@@ -104,8 +105,8 @@ function delay(ms) {
       // Geçici dosyayı sil (isteğe bağlı)
       fs.unlinkSync(SCREENSHOT_PATH);
 
-      // 20 saniye gecikme
-      await delay(20000); // 20000 milisaniye = 20 saniye
+      // 10 saniye gecikme
+      await delay(10000); // 10000 milisaniye = 10 saniye
     }
 
     await browser.close();
