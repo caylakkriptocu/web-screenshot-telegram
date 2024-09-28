@@ -11,7 +11,7 @@ const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 const SITES = [
   {
     url: 'https://sosovalue.com/assets/etf/Total_Crypto_Spot_ETF_Fund_Flow?page=usBTC',
-    messageTemplate: '<b>BTC ETF</b> ({{datetime}})\n{{url}}\n<strong>Günlük Net Giriş:</strong> {{description}}',
+    messageTemplate: '<b>BTC ETF</b> ({{datetime}})\n<strong>Günlük Net Giriş:</strong> {{description}}',
     identifier: 'usBTC',
     // Sayfanın tamamen yüklendiğini doğrulamak için önemli bir öğenin XPath'i
     waitForXPath: '//span[contains(text(), "Total Bitcoin Spot ETF Net Inflow")]',
@@ -20,7 +20,7 @@ const SITES = [
   },
   {
     url: 'https://sosovalue.com/assets/etf/Total_Crypto_Spot_ETF_Fund_Flow?page=usETH',
-    messageTemplate: '<b>ETH ETF</b> ({{datetime}})}\n<strong>Günlük Net Giriş:</strong> {{description}}',
+    messageTemplate: '<b>ETH ETF</b> ({{datetime}})\n<strong>Günlük Net Giriş:</strong> {{description}}',
     identifier: 'usETH',
     // Sayfanın tamamen yüklendiğini doğrulamak için önemli bir öğenin XPath'i
     waitForXPath: '//span[contains(text(), "Total Ethereum Spot ETF Net Inflow")]',
