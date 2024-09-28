@@ -13,15 +13,14 @@ const SITES = [
     url: 'https://sosovalue.com/assets/etf/Total_Crypto_Spot_ETF_Fund_Flow?page=usBTC',
     messageTemplate: 'BTC ETF ({{datetime}}) GİRİŞLERİ',
     identifier: 'usBTC',
-    // Burada sayfanın tamamen yüklendiğini doğrulamak için önemli bir öğenin CSS seçicisini ekleyin
-    // Örneğin, sayfadaki bir tablo veya grafik olabilir
-    waitForSelector: 'BTC' // Bu seçiciyi sayfanın gerçek bir öğesi ile değiştirin
+    // Sayfanın tamamen yüklendiğini doğrulamak için önemli bir öğenin CSS seçicisi
+    waitForSelector: '.btc-data-table' // Bu seçiciyi sayfanın gerçek bir öğesi ile değiştirin
   },
   {
     url: 'https://sosovalue.com/assets/etf/Total_Crypto_Spot_ETF_Fund_Flow?page=usETH',
     messageTemplate: 'ETHHETF ({{datetime}}) GİRİŞLERİ',
     identifier: 'usETH',
-    waitForSelector: 'ETH' // Bu seçiciyi sayfanın gerçek bir öğesi ile değiştirin
+    waitForSelector: '.eth-data-table' // Bu seçiciyi sayfanın gerçek bir öğesi ile değiştirin
   }
 ];
 
@@ -46,17 +45,17 @@ function delay(ms) {
 }
 
 (async () => {
-  try {
-    // Puppeteer ile tarayıcıyı başlat
-    const browser = await puppeteer.launch({
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      // headless: false, // Geliştirme sırasında sayfanın nasıl render edildiğini görmek için devre dışı bırakabilirsiniz
-    });
+  for (const site of SITES) {
+    let browser;
+    try {
+      // Yeni bir tarayıcı başlat
+      browser = await puppeteer.launch({
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        // headless: false, // Geliştirme sırasında sayfanın nasıl render edildiğini görmek için devre dışı bırakabilirsiniz
+      });
 
-    for (const site of SITES) {
       const page = await browser.newPage();
       await page.setViewport({ width: 1280, height: 800 }); // Viewport ayarları
-
       await page.goto(site.url, { waitUntil: 'networkidle2' });
 
       // Belirli bir öğeyi bekleme (varsa)
@@ -67,6 +66,7 @@ function delay(ms) {
           console.error(`Belirtilen öğe bulunamadı: ${site.waitForSelector} için ${site.identifier}`);
           // Eğer öğe bulunamazsa, ekran görüntüsü almayı denemek yerine sonraki siteye geçebiliriz
           await page.close();
+          await browser.close();
           continue;
         }
       } else {
@@ -108,13 +108,15 @@ function delay(ms) {
 
       // Geçici dosyayı sil (isteğe bağlı)
       fs.unlinkSync(SCREENSHOT_PATH);
-
-      // 10 saniye gecikme
-      await delay(10000); // 10000 milisaniye = 10 saniye
+    } catch (error) {
+      console.error(`Hata oluştu: ${error.message}`);
+    } finally {
+      if (browser) {
+        await browser.close();
+      }
     }
 
-    await browser.close();
-  } catch (error) {
-    console.error('Hata oluştu:', error);
+    // 10 saniye gecikme
+    await delay(10000); // 10000 milisaniye = 10 saniye
   }
 })();
