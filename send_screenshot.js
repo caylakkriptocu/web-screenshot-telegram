@@ -11,17 +11,21 @@ const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 const SITES = [
   {
     url: 'https://sosovalue.com/assets/etf/Total_Crypto_Spot_ETF_Fund_Flow?page=usBTC',
-    messageTemplate: '<b>BTC ETF</b> ({{datetime}}) GİRİŞLERİ\n{{url}}',
+    messageTemplate: '<b>BTC ETF</b> ({{datetime}}) GİRİŞLERİ\n{{url}}\n<strong>Açıklama:</strong> {{description}}',
     identifier: 'usBTC',
     // Sayfanın tamamen yüklendiğini doğrulamak için önemli bir öğenin XPath'i
-    waitForXPath: '//span[contains(@class, "text-neutral-fg-2-rest") and contains(text(), "Total Bitcoin Spot ETF Net Inflow")]'
+    waitForXPath: '//span[contains(@class, "text-neutral-fg-2-rest") and contains(text(), "Total Bitcoin Spot ETF Net Inflow")]',
+    // Metni almak istediğiniz öğenin XPath'i
+    textXPath: '//span[contains(@class, "text-neutral-fg-2-rest") and contains(text(), "Total Bitcoin Spot ETF Net Inflow")]'
   },
   {
     url: 'https://sosovalue.com/assets/etf/Total_Crypto_Spot_ETF_Fund_Flow?page=usETH',
-    messageTemplate: '<b>ETH ETF</b> ({{datetime}}) GİRİŞLERİ\n{{url}}',
+    messageTemplate: '<b>ETH ETF</b> ({{datetime}}) GİRİŞLERİ\n{{url}}\n<strong>Açıklama:</strong> {{description}}',
     identifier: 'usETH',
     // Sayfanın tamamen yüklendiğini doğrulamak için önemli bir öğenin XPath'i
-    waitForXPath: '//span[contains(@class, "text-neutral-fg-2-rest") and contains(text(), "Total Ethereum Spot ETF Net Inflow")]'
+    waitForXPath: '//span[contains(@class, "text-neutral-fg-2-rest") and contains(text(), "Total Ethereum Spot ETF Net Inflow")]',
+    // Metni almak istediğiniz öğenin XPath'i
+    textXPath: '//span[contains(@class, "text-neutral-fg-2-rest") and contains(text(), "Total Ethereum Spot ETF Net Inflow")]'
   }
 ];
 
@@ -74,6 +78,20 @@ function delay(ms) {
         await page.waitForTimeout(5000); // 5 saniye bekleme
       }
 
+      // Belirli bir öğenin metnini al
+      let description = 'Metin alınamadı.';
+      if (site.textXPath) {
+        try {
+          const [element] = await page.$x(site.textXPath);
+          if (element) {
+            description = await page.evaluate(el => el.textContent, element);
+            console.log(`Açıklama metni alındı: ${description}`);
+          }
+        } catch (e) {
+          console.error(`Açıklama metni alınamadı: ${e.message}`);
+        }
+      }
+
       // Dinamik dosya adı oluştur
       const formattedDateTime = getFormattedDateTime();
       const SCREENSHOT_PATH = `screenshot_${site.identifier}_${formattedDateTime}.png`;
@@ -85,7 +103,8 @@ function delay(ms) {
       // Mesaj içeriğini oluştur
       const message = site.messageTemplate
         .replace('{{datetime}}', new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }))
-        .replace('{{url}}', site.url);
+        .replace('{{url}}', site.url)
+        .replace('{{description}}', description);
 
       // Telegram'a gönderilecek form data
       const formData = new FormData();
