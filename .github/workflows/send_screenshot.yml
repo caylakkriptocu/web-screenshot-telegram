@@ -2,8 +2,8 @@ name: Send Screenshot to Telegram
 
 on:
   schedule:
-    # Her gün UTC saat 5'te çalışır (Türkiye saati UTC+3 olduğundan 8:00'ye denk gelir)
-    - cron: '0 5 * * *'
+    # Her 15 dakikada bir çalıştırır
+    - cron: '*/15 * * * *'
   workflow_dispatch:
 
 jobs:
