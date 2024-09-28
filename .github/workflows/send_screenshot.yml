@@ -1,0 +1,29 @@
+name: Send Screenshot to Telegram
+
+on:
+  schedule:
+    # Her gün UTC saat 5'te çalışır (Türkiye saati UTC+3 olduğundan 8:00'ye denk gelir)
+    - cron: '0 5 * * *'
+  workflow_dispatch:
+
+jobs:
+  send-screenshot:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Repository'yi Klonla
+        uses: actions/checkout@v3
+
+      - name: Node.js Kurulumu
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+
+      - name: Bağımlılıkları Yükle
+        run: npm install
+
+      - name: Script'i Çalıştır
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: node send_screenshot.js
