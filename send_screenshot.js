@@ -20,7 +20,7 @@ const SITES = [
   },
   {
     url: 'https://sosovalue.com/assets/etf/Total_Crypto_Spot_ETF_Fund_Flow?page=usETH',
-    messageTemplate: '<b>ETH ETF</b> ({{datetime}})\n{{url}}\n<strong>Günlük Net Giriş:</strong> {{description}}',
+    messageTemplate: '<b>ETH ETF</b> ({{datetime}})}\n<strong>Günlük Net Giriş:</strong> {{description}}',
     identifier: 'usETH',
     // Sayfanın tamamen yüklendiğini doğrulamak için önemli bir öğenin XPath'i
     waitForXPath: '//span[contains(text(), "Total Ethereum Spot ETF Net Inflow")]',
