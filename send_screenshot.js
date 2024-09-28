@@ -7,8 +7,11 @@ const FormData = require('form-data');
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
-// Ekran görüntüsü alınacak URL
-const URL = 'https://sosovalue.com/assets/etf/Total_Crypto_Spot_ETF_Fund_Flow?page=usBTC';
+// Ekran görüntüsü alınacak URL'ler
+const URLS = [
+  'https://sosovalue.com/assets/etf/Total_Crypto_Spot_ETF_Fund_Flow?page=usBTC',
+  'https://sosovalue.com/assets/etf/Total_Crypto_Spot_ETF_Fund_Flow?page=usETH'
+];
 
 // Tarih ve saat bilgisi ekleyerek dinamik dosya adı oluşturma fonksiyonu
 function getFormattedDateTime() {
@@ -25,11 +28,8 @@ function getFormattedDateTime() {
   return `${year}-${month}-${day}_${hours}-${minutes}-${seconds}`;
 }
 
-// Dinamik ekran görüntüsü dosya adı
-const SCREENSHOT_PATH = `screenshot_${getFormattedDateTime()}.png`;
-
 // Mesaj içeriği
-const MESSAGE = `📅 Ekran görüntüsü alındı: ${new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' })}`;
+const MESSAGE = `📅 Ekran görüntüleri alındı: ${new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' })}`;
 
 (async () => {
   try {
@@ -37,21 +37,40 @@ const MESSAGE = `📅 Ekran görüntüsü alındı: ${new Date().toLocaleString(
     const browser = await puppeteer.launch({
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
     });
-    const page = await browser.newPage();
-    await page.goto(URL, { waitUntil: 'networkidle2' });
+    
+    // Tüm ekran görüntülerini saklamak için bir array
+    const screenshots = [];
 
-    // Ekran görüntüsünü al ve dinamik dosya adına kaydet
-    await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
+    for (const url of URLS) {
+      const page = await browser.newPage();
+      await page.goto(url, { waitUntil: 'networkidle2' });
+
+      // Dinamik dosya adı oluştur
+      const formattedDateTime = getFormattedDateTime();
+      const domain = new URL(url).searchParams.get('page'); // Sayfa parametresine göre isimlendirme
+      const SCREENSHOT_PATH = `screenshot_${domain}_${formattedDateTime}.png`;
+
+      // Ekran görüntüsünü al ve kaydet
+      await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
+      screenshots.push(SCREENSHOT_PATH);
+      await page.close();
+    }
+
     await browser.close();
 
-    // Ekran görüntüsünü Telegram'a gönder
+    // Telegram'a gönderilecek form data
     const formData = new FormData();
     formData.append('chat_id', TELEGRAM_CHAT_ID);
-    formData.append('photo', fs.createReadStream(SCREENSHOT_PATH));
-    formData.append('caption', MESSAGE); // Mesajı ekle
+    formData.append('caption', MESSAGE);
 
+    // Her ekran görüntüsünü form data'ya ekle
+    screenshots.forEach((screenshot) => {
+      formData.append('photo', fs.createReadStream(screenshot));
+    });
+
+    // Ekran görüntülerini Telegram'a gönder
     const response = await axios.post(
-      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`,
+      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMediaGroup`,
       formData,
       {
         headers: formData.getHeaders(),
@@ -59,13 +78,15 @@ const MESSAGE = `📅 Ekran görüntüsü alındı: ${new Date().toLocaleString(
     );
 
     if (response.data.ok) {
-      console.log('Ekran görüntüsü başarıyla gönderildi:', SCREENSHOT_PATH);
+      console.log('Ekran görüntüleri başarıyla gönderildi:', screenshots);
     } else {
       console.error('Telegram API hatası:', response.data);
     }
 
-    // Geçici dosyayı sil (isteğe bağlı)
-    fs.unlinkSync(SCREENSHOT_PATH);
+    // Geçici dosyaları sil (isteğe bağlı)
+    screenshots.forEach((screenshot) => {
+      fs.unlinkSync(screenshot);
+    });
   } catch (error) {
     console.error('Hata oluştu:', error);
   }
