@@ -13,15 +13,17 @@ const SITES = [
     url: 'https://sosovalue.com/assets/etf/us-btc-spot',
     messageTemplate: '<b>BTC ETF</b> ({{datetime}})\n<strong>Günlük Net Giriş:</strong> {{description}}',
     identifier: 'usBTC',
-    waitForXPath: '//span[@class="max-w-[200px] truncate text-sm font-bold" and contains(text(), "US BTC Spot ETF")]',
-    textXPath: '//div[@class="text-[20px] font-bold flex items-center text-status-down"]'
+    waitForXPath: '//span[contains(text(), "Total Bitcoin Spot ETF Net Inflow")]',
+    textXPath: '//button[contains(@class, "MuiButton-root") and contains(.,"Daily Total Net Inflow")]',
+    screenshotXPath: '//div[@class="flex-1 h-full transition-opacity"]' // Ekran görüntüsü alınacak BTC alanı
   },
   {
     url: 'https://sosovalue.com/assets/etf/us-eth-spot',
     messageTemplate: '<b>ETH ETF</b> ({{datetime}})\n<strong>Günlük Net Giriş:</strong> {{description}}',
     identifier: 'usETH',
-    waitForXPath: '//span[@class="max-w-[200px] truncate text-sm font-bold" and contains(text(), "US ETH Spot ETF")]',
-    textXPath: '//div[@class="text-[20px] font-bold flex items-center text-status-up"]'
+    waitForXPath: '//span[contains(text(), "Total Ethereum Spot ETF Net Inflow")]',
+    textXPath: '//button[contains(@class, "MuiButton-root") and contains(.,"Daily Total Net Inflow")]',
+    screenshotXPath: '//div[@class="flex-1 h-full transition-opacity"]' // Ekran görüntüsü alınacak ETH alanı
   }
 ];
 
@@ -37,7 +39,7 @@ function getFormattedDateTime() {
   const minutes = String(date.getMinutes()).padStart(2, '0');
   const seconds = String(date.getSeconds()).padStart(2, '0');
 
-  return ${year}-${month}-${day}_${hours}-${minutes}-${seconds};
+  return `${year}-${month}-${day}_${hours}-${minutes}-${seconds}`;
 }
 
 // 10 saniye gecikme fonksiyonu
@@ -64,9 +66,9 @@ function delay(ms) {
       if (site.waitForXPath) {
         try {
           await page.waitForXPath(site.waitForXPath, { timeout: 60000 });
-          console.log(Belirtilen öğe bulundu: ${site.identifier});
+          console.log(`Belirtilen öğe bulundu: ${site.identifier}`);
         } catch (e) {
-          console.error(Belirtilen öğe bulunamadı: ${site.waitForXPath} için ${site.identifier});
+          console.error(`Belirtilen öğe bulunamadı: ${site.waitForXPath} için ${site.identifier}`);
         }
       } else {
         await page.waitForTimeout(5000);
@@ -81,18 +83,18 @@ function delay(ms) {
           if (element) {
             description = await page.evaluate(el => el.textContent, element);
             description = description.trim();
-            console.log(Açıklama metni alındı: ${description});
+            console.log(`Açıklama metni alındı: ${description}`);
 
             // Dinamik dosya adı oluştur
             const formattedDateTime = getFormattedDateTime();
-            elementScreenshotPath = element_screenshot_${site.identifier}_${formattedDateTime}.png;
+            elementScreenshotPath = `element_screenshot_${site.identifier}_${formattedDateTime}.png`;
 
             // Sadece öğenin ekran görüntüsünü al
             await element.screenshot({ path: elementScreenshotPath });
-            console.log(Öğenin ekran görüntüsü alındı: ${elementScreenshotPath});
+            console.log(`Öğenin ekran görüntüsü alındı: ${elementScreenshotPath}`);
           }
         } catch (e) {
-          console.error(Açıklama metni alınamadı veya öğe bulunamadı: ${e.message});
+          console.error(`Açıklama metni alınamadı veya öğe bulunamadı: ${e.message}`);
         }
       }
 
@@ -113,7 +115,7 @@ function delay(ms) {
 
         // Ekran görüntüsünü Telegram'a gönder
         const response = await axios.post(
-          https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto,
+          `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`,
           formData,
           {
             headers: formData.getHeaders(),
@@ -121,7 +123,7 @@ function delay(ms) {
         );
 
         if (response.data.ok) {
-          console.log(Ekran görüntüsü başarıyla gönderildi: ${elementScreenshotPath});
+          console.log(`Ekran görüntüsü başarıyla gönderildi: ${elementScreenshotPath}`);
         } else {
           console.error('Telegram API hatası:', response.data);
         }
@@ -131,7 +133,7 @@ function delay(ms) {
       }
 
     } catch (error) {
-      console.error(Hata oluştu: ${error.message});
+      console.error(`Hata oluştu: ${error.message}`);
     } finally {
       if (browser) {
         await browser.close();
@@ -152,7 +154,7 @@ function delay(ms) {
 
     // Mesajı Telegram'a gönder
     const response = await axios.post(
-      https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage,
+      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
       formData,
       {
         headers: formData.getHeaders(),
