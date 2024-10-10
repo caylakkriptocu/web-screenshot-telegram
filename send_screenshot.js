@@ -10,7 +10,7 @@ const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 // Ekran görüntüsü alınacak URL'ler ve mesaj şablonları
 const SITES = [
   {
-    url: 'https://sosovalue.com/assets/etf/Total_Crypto_Spot_ETF_Fund_Flow?page=usBTC',
+    url: 'https://sosovalue.com/assets/etf/us-btc-spot',
     messageTemplate: '<b>BTC ETF</b> ({{datetime}})\n<strong>Günlük Net Giriş:</strong> {{description}}',
     identifier: 'usBTC',
     // Sayfanın tamamen yüklendiğini doğrulamak için önemli bir öğenin XPath'i
@@ -19,7 +19,7 @@ const SITES = [
     textXPath: '//span[contains(@class, "text-base") and contains(@class, "font-bold") and contains(@class, "text-neutral-fg-2-rest")]'
   },
   {
-    url: 'https://sosovalue.com/assets/etf/Total_Crypto_Spot_ETF_Fund_Flow?page=usETH',
+    url: 'https://sosovalue.com/assets/etf/us-eth-spot',
     messageTemplate: '<b>ETH ETF</b> ({{datetime}})\n<strong>Günlük Net Giriş:</strong> {{description}}',
     identifier: 'usETH',
     // Sayfanın tamamen yüklendiğini doğrulamak için önemli bir öğenin XPath'i
