@@ -78,33 +78,34 @@ function delay(ms) {
       await page.screenshot({ path: fullPageScreenshotPath, fullPage: true });
       console.log(`Tüm sayfanın ekran görüntüsü alındı: ${fullPageScreenshotPath}`);
 
-      // Mesaj içeriğini oluştur
+       // Mesaj içeriğini oluştur
       const message = site.messageTemplate
         .replace('{{datetime}}', new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }))
         .replace('{{url}}', site.url)
-        .replace('{{description}}', 'Ekran görüntüsü başarıyla alındı.');
+        .replace('{{description}}', description);
 
       // Telegram'a gönderilecek form data
-      const formData = new FormData();
-      formData.append('chat_id', TELEGRAM_CHAT_ID);
-      formData.append('photo', fs.createReadStream(fullPageScreenshotPath));
-      formData.append('caption', message);
-      formData.append('parse_mode', 'HTML');
+      if (elementScreenshotPath) {
+        const formData = new FormData();
+        formData.append('chat_id', TELEGRAM_CHAT_ID);
+        formData.append('photo', fs.createReadStream(elementScreenshotPath));
+        formData.append('caption', message);
+        formData.append('parse_mode', 'HTML');
 
-      // Ekran görüntüsünü Telegram'a gönder
-      const response = await axios.post(
-        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`,
-        formData,
-        {
-          headers: formData.getHeaders(),
+        // Ekran görüntüsünü Telegram'a gönder
+        const response = await axios.post(
+          https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto,
+          formData,
+          {
+            headers: formData.getHeaders(),
+          }
+        );
+
+        if (response.data.ok) {
+          console.log(Ekran görüntüsü başarıyla gönderildi: ${elementScreenshotPath});
+        } else {
+          console.error('Telegram API hatası:', response.data);
         }
-      );
-
-      if (response.data.ok) {
-        console.log(`Ekran görüntüsü başarıyla Telegram'a gönderildi: ${fullPageScreenshotPath}`);
-      } else {
-        console.error('Telegram API hatası:', response.data);
-      }
 
       // Geçici dosyayı sil (isteğe bağlı)
       fs.unlinkSync(fullPageScreenshotPath);
