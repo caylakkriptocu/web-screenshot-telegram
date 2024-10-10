@@ -12,12 +12,16 @@ const SITES = [
   {
     url: 'https://sosovalue.com/assets/etf/us-btc-spot',
     messageTemplate: '<b>BTC ETF</b> ({{datetime}})\n<strong>Günlük Net Giriş:</strong> {{description}}',
-    identifier: 'usBTC'
+    identifier: 'usBTC',
+    waitForXPath: '//span[@class="max-w-[200px] truncate text-sm font-bold" and contains(text(), "US BTC Spot ETF")]',
+    textXPath: '//div[@class="text-[20px] font-bold flex items-center text-status-down"]'
   },
   {
     url: 'https://sosovalue.com/assets/etf/us-eth-spot',
     messageTemplate: '<b>ETH ETF</b> ({{datetime}})\n<strong>Günlük Net Giriş:</strong> {{description}}',
-    identifier: 'usETH'
+    identifier: 'usETH',
+    waitForXPath: '//span[@class="max-w-[200px] truncate text-sm font-bold" and contains(text(), "US ETH Spot ETF")]',
+    textXPath: '//div[@class="text-[20px] font-bold flex items-center text-status-up"]'
   }
 ];
 
