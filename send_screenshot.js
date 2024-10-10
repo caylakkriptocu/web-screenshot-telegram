@@ -1,164 +1,148 @@
 const puppeteer = require('puppeteer');
 const axios = require('axios');
-const fs = require('fs');
+const fs = require('fs').promises;
 const FormData = require('form-data');
 
-// Ortam değişkenlerinden Telegram bilgilerini al
+// Retrieve Telegram credentials from environment variables
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
-// Ekran görüntüsü alınacak URL'ler ve mesaj şablonları
+// Validate environment variables
+if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
+  console.error('Error: TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be set in environment variables.');
+  process.exit(1);
+}
+
+// URLs to monitor and their configurations
 const SITES = [
   {
     url: 'https://sosovalue.com/assets/etf/us-btc-spot',
-    messageTemplate: '<b>BTC ETF</b> ({{datetime}})\n<strong>Günlük Net Giriş:</strong> {{description}}',
+    messageTemplate: '<b>BTC ETF</b> ({{datetime}}) GİRİŞLERİ\n{{url}}',
     identifier: 'usBTC',
-    waitForXPath: '//span[@class="max-w-[200px] truncate text-sm font-bold" and contains(text(), "US BTC Spot ETF")]',
-    textXPath: '//div[@class="text-[20px] font-bold flex items-center text-status-down"]'
+    waitForXPath: '//span[contains(@class, "text-neutral-fg-2-rest") and contains(text(), "Total Bitcoin Spot ETF Net Inflow")]'
   },
   {
     url: 'https://sosovalue.com/assets/etf/us-eth-spot',
-    messageTemplate: '<b>ETH ETF</b> ({{datetime}})\n<strong>Günlük Net Giriş:</strong> {{description}}',
+    messageTemplate: '<b>ETH ETF</b> ({{datetime}}) GİRİŞLERİ\n{{url}}',
     identifier: 'usETH',
-    waitForXPath: '//span[@class="max-w-[200px] truncate text-sm font-bold" and contains(text(), "US ETH Spot ETF")]',
-    textXPath: '//div[@class="text-[20px] font-bold flex items-center text-status-up"]'
+    waitForXPath: '//span[contains(@class, "text-neutral-fg-2-rest") and contains(text(), "Total Ethereum Spot ETF Net Inflow")]'
   }
 ];
 
-// Tarih ve saat bilgisi ekleyerek dinamik dosya adı oluşturma fonksiyonu
+// Generate a formatted date-time string
 function getFormattedDateTime() {
   const date = new Date();
-
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  const seconds = String(date.getSeconds()).padStart(2, '0');
-
-  return `${year}-${month}-${day}_${hours}-${minutes}-${seconds}`;
+  return date.toISOString().replace(/[:.]/g, '-'); // e.g., 2023-04-05T14-30-00-000Z
 }
 
-// 10 saniye gecikme fonksiyonu
+// Delay function
 function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 (async () => {
-  let overallMessage = '';  // Tüm sayfalar için net giriş verilerini toplamak için
-  for (const site of SITES) {
-    let browser;
-    try {
-      // Yeni bir tarayıcı başlat
-      browser = await puppeteer.launch({
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      });
+  let browser;
+  try {
+    // Launch Puppeteer browser once
+    browser = await puppeteer.launch({
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      // headless: true, // Ensure headless is true for production
+    });
 
+    for (const site of SITES) {
       const page = await browser.newPage();
       await page.setViewport({ width: 1280, height: 800 });
 
-      await page.goto(site.url, { waitUntil: 'networkidle2' });
+      try {
+        await page.goto(site.url, { waitUntil: 'networkidle2', timeout: 60000 });
+      } catch (err) {
+        console.error(`Failed to navigate to ${site.url}: ${err.message}`);
+        await page.close();
+        continue; // Skip to the next site
+      }
 
-      // Belirli bir öğeyi bekleme
+      // Wait for the specific element if defined
       if (site.waitForXPath) {
         try {
           await page.waitForXPath(site.waitForXPath, { timeout: 60000 });
-          console.log(`Belirtilen öğe bulundu: ${site.identifier}`);
+          console.log(`Element found for ${site.identifier}`);
         } catch (e) {
-          console.error(`Belirtilen öğe bulunamadı: ${site.waitForXPath} için ${site.identifier}`);
+          console.error(`Element not found for ${site.identifier}: ${e.message}`);
+          // Proceed to take a screenshot regardless
         }
       } else {
-        await page.waitForTimeout(5000);
+        await page.waitForTimeout(5000); // Wait additional time if no specific element
       }
 
-      // Belirli bir öğenin metnini al
-      let description = 'Metin alınamadı.';
-      if (site.textXPath) {
-        try {
-          const [element] = await page.$x(site.textXPath);
-          if (element) {
-            description = await page.evaluate(el => el.textContent, element);
-            description = description.trim();
-            console.log(`Açıklama metni alındı: ${description}`);
-          }
-        } catch (e) {
-          console.error(`Açıklama metni alınamadı veya öğe bulunamadı: ${e.message}`);
-        }
-      }
-
-      // Tüm sayfanın ekran görüntüsünü al
+      // Generate screenshot path
       const formattedDateTime = getFormattedDateTime();
-      const screenshotPath = `screenshot_${site.identifier}_${formattedDateTime}.png`;
-      
-      await page.screenshot({ path: screenshotPath, fullPage: true });
-      console.log(`Sayfanın tamamının ekran görüntüsü alındı: ${screenshotPath}`);
+      const SCREENSHOT_PATH = `screenshot_${site.identifier}_${formattedDateTime}.png`;
 
-      // Her site için mesajı biriktir
+      // Take screenshot
+      try {
+        await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
+        console.log(`Screenshot taken: ${SCREENSHOT_PATH}`);
+      } catch (err) {
+        console.error(`Failed to take screenshot for ${site.identifier}: ${err.message}`);
+        await page.close();
+        continue;
+      }
+
+      await page.close();
+
+      // Prepare the message
       const message = site.messageTemplate
         .replace('{{datetime}}', new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }))
-        .replace('{{description}}', description);
-      
-      overallMessage += message + '\n\n';  // Tüm sayfalar için mesajları biriktir
+        .replace('{{url}}', site.url);
 
-      // Telegram'a gönderilecek form data
+      // Prepare form data
       const formData = new FormData();
       formData.append('chat_id', TELEGRAM_CHAT_ID);
-      formData.append('photo', fs.createReadStream(screenshotPath));
+      formData.append('photo', await fs.readFile(SCREENSHOT_PATH), SCREENSHOT_PATH);
       formData.append('caption', message);
       formData.append('parse_mode', 'HTML');
 
-      // Ekran görüntüsünü Telegram'a gönder
-      const response = await axios.post(
-        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`,
-        formData,
-        {
-          headers: formData.getHeaders(),
+      // Send the screenshot to Telegram
+      try {
+        const response = await axios.post(
+          `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`,
+          formData,
+          {
+            headers: formData.getHeaders(),
+            maxContentLength: Infinity,
+            maxBodyLength: Infinity
+          }
+        );
+
+        if (response.data.ok) {
+          console.log(`Screenshot sent to Telegram: ${SCREENSHOT_PATH}`);
+        } else {
+          console.error(`Telegram API error for ${site.identifier}:`, response.data);
         }
-      );
-
-      if (response.data.ok) {
-        console.log(`Ekran görüntüsü başarıyla gönderildi: ${screenshotPath}`);
-      } else {
-        console.error('Telegram API hatası:', response.data);
+      } catch (err) {
+        console.error(`Failed to send screenshot to Telegram for ${site.identifier}: ${err.message}`);
       }
 
-      // Geçici dosyayı sil (isteğe bağlı)
-      fs.unlinkSync(screenshotPath);
+      // Delete the screenshot file
+      try {
+        await fs.unlink(SCREENSHOT_PATH);
+        console.log(`Deleted screenshot file: ${SCREENSHOT_PATH}`);
+      } catch (err) {
+        console.error(`Failed to delete screenshot file ${SCREENSHOT_PATH}: ${err.message}`);
+      }
 
-    } catch (error) {
-      console.error(`Hata oluştu: ${error.message}`);
-    } finally {
-      if (browser) {
-        await browser.close();
+      // Delay before processing the next site
+      if (site !== SITES[SITES.length - 1]) {
+        console.log('Waiting for 10 seconds before processing the next site...');
+        await delay(10000);
       }
     }
-
-    if (site !== SITES[SITES.length - 1]) {
-      await delay(10000);  // İki site arasında 10 saniye bekle
+  } catch (err) {
+    console.error(`Unexpected error: ${err.message}`);
+  } finally {
+    if (browser) {
+      await browser.close();
     }
-  }
-
-  // Tüm sayfalar için toplanan mesajı Telegram'a gönder
-  if (overallMessage) {
-    const formData = new FormData();
-    formData.append('chat_id', TELEGRAM_CHAT_ID);
-    formData.append('text', overallMessage);
-    formData.append('parse_mode', 'HTML');
-
-    // Mesajı Telegram'a gönder
-    const response = await axios.post(
-      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
-      formData,
-      {
-        headers: formData.getHeaders(),
-      }
-    );
-
-    if (response.data.ok) {
-      console.log('Günlük net giriş mesajı başarıyla gönderildi.');
-    } else {
-      console.error('Telegram API hatası:', response.data);
-    }
+    console.log('Browser closed. Script finished.');
   }
 })();
