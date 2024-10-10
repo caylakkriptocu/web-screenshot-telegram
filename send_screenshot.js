@@ -14,18 +14,18 @@ const SITES = [
     messageTemplate: '<b>BTC ETF</b> ({{datetime}})\n<strong>Günlük Net Giriş:</strong> {{description}}',
     identifier: 'usBTC',
     // Sayfanın tamamen yüklendiğini doğrulamak için önemli bir öğenin XPath'i
-    waitForXPath: '//span[contains(text(), "Total Bitcoin Spot ETF Net Inflow")]',
+    waitForXPath: '//span[@class="max-w-[200px] truncate text-sm font-bold" and contains(text(), "US BTC Spot ETF")]',
     // Metni almak istediğiniz öğenin XPath'i
-    textXPath: '//span[contains(@class, "text-base") and contains(@class, "font-bold") and contains(@class, "text-neutral-fg-2-rest")]'
+    textXPath: '//div[@class="text-[20px] font-bold flex items-center text-status-down"]'
   },
   {
     url: 'https://sosovalue.com/assets/etf/us-eth-spot',
     messageTemplate: '<b>ETH ETF</b> ({{datetime}})\n<strong>Günlük Net Giriş:</strong> {{description}}',
     identifier: 'usETH',
     // Sayfanın tamamen yüklendiğini doğrulamak için önemli bir öğenin XPath'i
-    waitForXPath: '//span[contains(text(), "Total Ethereum Spot ETF Net Inflow")]',
+    waitForXPath: '//span[@class="max-w-[200px] truncate text-sm font-bold" and contains(text(), "US ETH Spot ETF")]',
     // Metni almak istediğiniz öğenin XPath'i
-    textXPath: '//span[contains(@class, "text-base") and contains(@class, "font-bold") and contains(@class, "text-neutral-fg-2-rest")]'
+    textXPath: '//div[@class="text-[20px] font-bold flex items-center text-status-up"]'
   }
 ];
 
