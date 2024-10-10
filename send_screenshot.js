@@ -17,13 +17,13 @@ if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
 const SITES = [
   {
     url: 'https://sosovalue.com/assets/etf/us-btc-spot',
-    messageTemplate: '<b>BTC ETF</b> ({{datetime}})\nGÜNLÜK NET GİRİŞ: {{netFlow}}',
+    messageTemplate: '<b>BTC ETF</b> ({{datetime}}) <b>\nGÜNLÜK NET GİRİŞ:</b> {{netFlow}}',
     identifier: 'usBTC',
     netFlowXPath: '//div[contains(@class, "text-[20px] font-bold flex items-center text-status")]'
   },
   {
     url: 'https://sosovalue.com/assets/etf/us-eth-spot',
-    messageTemplate: '<b>ETH ETF</b> ({{datetime}})\nGÜNLÜK NET GİRİŞ: {{netFlow}}',
+    messageTemplate: '<b>ETH ETF</b> ({{datetime}}) <b>\nGÜNLÜK NET GİRİŞ:</b> {{netFlow}}',
     identifier: 'usETH',
     netFlowXPath: '//div[contains(@class, "text-[20px] font-bold flex items-center text-status")]'
   }
