@@ -1,6 +1,7 @@
 const puppeteer = require('puppeteer');
 const axios = require('axios');
 const fs = require('fs').promises;
+const FormData = require('form-data');
 
 // Retrieve Telegram credentials from environment variables
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -16,15 +17,15 @@ if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
 const SITES = [
   {
     url: 'https://sosovalue.com/assets/etf/us-btc-spot',
-    messageTemplate: '<b>BTC ETF</b> ({{datetime}})\nGÜNLÜK NET GİRİŞ: {{netFlow}}\n{{url}}',
+    messageTemplate: '<b>BTC ETF</b> ({{datetime}})\nGÜNLÜK NET GİRİŞ: {{netFlow}}',
     identifier: 'usBTC',
-    netFlowXPath: '//div[contains(@class, "text-[20px] font-bold flex items-center text-status-down")]'
+    netFlowXPath: '//div[contains(@class, "text-[20px] font-bold flex items-center text-status")]'
   },
   {
     url: 'https://sosovalue.com/assets/etf/us-eth-spot',
-    messageTemplate: '<b>ETH ETF</b> ({{datetime}})\nGÜNLÜK NET GİRİŞ: {{netFlow}}\n{{url}}',
+    messageTemplate: '<b>ETH ETF</b> ({{datetime}})\nGÜNLÜK NET GİRİŞ: {{netFlow}}',
     identifier: 'usETH',
-    netFlowXPath: '//div[contains(@class, "text-[20px] font-bold flex items-center text-status-down")]'
+    netFlowXPath: '//div[contains(@class, "text-[20px] font-bold flex items-center text-status")]'
   }
 ];
 
@@ -76,32 +77,61 @@ function delay(ms) {
         netFlow = 'Bilinmiyor';
       }
 
+      // Generate screenshot path
+      const formattedDateTime = getFormattedDateTime();
+      const SCREENSHOT_PATH = `screenshot_${site.identifier}_${formattedDateTime}.png`;
+
+      // Take screenshot
+      try {
+        await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
+        console.log(`Screenshot taken: ${SCREENSHOT_PATH}`);
+      } catch (err) {
+        console.error(`Failed to take screenshot for ${site.identifier}: ${err.message}`);
+        await page.close();
+        continue;
+      }
+
       await page.close();
 
       // Prepare the message
       const message = site.messageTemplate
         .replace('{{datetime}}', new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }))
-        .replace('{{netFlow}}', netFlow)
-        .replace('{{url}}', site.url);
+        .replace('{{netFlow}}', netFlow);
 
-      // Send the message to Telegram
+      // Prepare form data for sending screenshot and message
+      const formData = new FormData();
+      formData.append('chat_id', TELEGRAM_CHAT_ID);
+      formData.append('photo', await fs.readFile(SCREENSHOT_PATH), SCREENSHOT_PATH);
+      formData.append('caption', message);
+      formData.append('parse_mode', 'HTML');
+
+      // Send the screenshot and message to Telegram
       try {
         const response = await axios.post(
-          `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+          `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`,
+          formData,
           {
-            chat_id: TELEGRAM_CHAT_ID,
-            text: message,
-            parse_mode: 'HTML'
+            headers: formData.getHeaders(),
+            maxContentLength: Infinity,
+            maxBodyLength: Infinity
           }
         );
 
         if (response.data.ok) {
-          console.log(`Message sent to Telegram for ${site.identifier}`);
+          console.log(`Screenshot sent to Telegram: ${SCREENSHOT_PATH}`);
         } else {
           console.error(`Telegram API error for ${site.identifier}:`, response.data);
         }
       } catch (err) {
-        console.error(`Failed to send message to Telegram for ${site.identifier}: ${err.message}`);
+        console.error(`Failed to send screenshot to Telegram for ${site.identifier}: ${err.message}`);
+      }
+
+      // Delete the screenshot file
+      try {
+        await fs.unlink(SCREENSHOT_PATH);
+        console.log(`Deleted screenshot file: ${SCREENSHOT_PATH}`);
+      } catch (err) {
+        console.error(`Failed to delete screenshot file ${SCREENSHOT_PATH}: ${err.message}`);
       }
 
       // Delay before processing the next site
