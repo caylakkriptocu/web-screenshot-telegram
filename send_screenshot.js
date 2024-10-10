@@ -13,15 +13,15 @@ const SITES = [
     url: 'https://sosovalue.com/assets/etf/us-btc-spot',
     messageTemplate: '<b>BTC ETF</b> ({{datetime}})\n<strong>Günlük Net Giriş:</strong> {{description}}',
     identifier: 'usBTC',
-    waitForXPath: '//span[@class="max-w-[200px] truncate text-sm font-bold" and contains(text(), "US BTC Spot ETF")]',
-    textXPath: '//div[@class="text-[20px] font-bold flex items-center text-status-down"]'
+    waitForXPath: '//span[contains(text(), "Total Bitcoin Spot ETF Net Inflow")]',
+    textXPath: '//button//span[contains(text(), "Daily Total Net Inflow")]/following-sibling::span' // XPath to get the daily inflow value for BTC
   },
   {
     url: 'https://sosovalue.com/assets/etf/us-eth-spot',
     messageTemplate: '<b>ETH ETF</b> ({{datetime}})\n<strong>Günlük Net Giriş:</strong> {{description}}',
     identifier: 'usETH',
-    waitForXPath: '//span[@class="max-w-[200px] truncate text-sm font-bold" and contains(text(), "US ETH Spot ETF")]',
-    textXPath: '//div[@class="text-[20px] font-bold flex items-center text-status-up"]'
+    waitForXPath: '//span[contains(text(), "Total Ethereum Spot ETF Net Inflow")]',
+    textXPath: '//button//span[contains(text(), "Daily Total Net Inflow")]/following-sibling::span' // XPath to get the daily inflow value for ETH
   }
 ];
 
