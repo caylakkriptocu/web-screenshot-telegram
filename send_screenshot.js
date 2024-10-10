@@ -60,6 +60,33 @@ function delay(ms) {
 
       await page.goto(site.url, { waitUntil: 'networkidle2' });
 
+      // Belirli bir öğeyi bekleme
+      if (site.waitForXPath) {
+        try {
+          await page.waitForXPath(site.waitForXPath, { timeout: 60000 });
+          console.log(`Belirtilen öğe bulundu: ${site.identifier}`);
+        } catch (e) {
+          console.error(`Belirtilen öğe bulunamadı: ${site.waitForXPath} için ${site.identifier}`);
+        }
+      } else {
+        await page.waitForTimeout(5000);
+      }
+
+      // Belirli bir öğenin metnini al
+      let description = 'Metin alınamadı.';
+      if (site.textXPath) {
+        try {
+          const [element] = await page.$x(site.textXPath);
+          if (element) {
+            description = await page.evaluate(el => el.textContent, element);
+            description = description.trim();
+            console.log(`Açıklama metni alındı: ${description}`);
+          }
+        } catch (e) {
+          console.error(`Açıklama metni alınamadı veya öğe bulunamadı: ${e.message}`);
+        }
+      }
+
       // Tüm sayfanın ekran görüntüsünü al
       const formattedDateTime = getFormattedDateTime();
       const screenshotPath = `screenshot_${site.identifier}_${formattedDateTime}.png`;
@@ -70,7 +97,7 @@ function delay(ms) {
       // Her site için mesajı biriktir
       const message = site.messageTemplate
         .replace('{{datetime}}', new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }))
-        .replace('{{description}}', 'Sayfa ekran görüntüsü alındı.');
+        .replace('{{description}}', description);
       
       overallMessage += message + '\n\n';  // Tüm sayfalar için mesajları biriktir
 
