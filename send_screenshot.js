@@ -14,14 +14,14 @@ const SITES = [
     messageTemplate: '<b>BTC ETF</b> ({{datetime}})\n<strong>Günlük Net Giriş:</strong> {{description}}',
     identifier: 'usBTC',
     waitForXPath: '//span[contains(text(), "Total Bitcoin Spot ETF Net Inflow")]',
-    textXPath: '//button//span[contains(text(), "Daily Total Net Inflow")]/following-sibling::span' // XPath to get the daily inflow value for BTC
+    screenshotXPath: '//div[@class="flex-1 h-full transition-opacity"]' // Ekran görüntüsü alınacak BTC alanı
   },
   {
     url: 'https://sosovalue.com/assets/etf/us-eth-spot',
     messageTemplate: '<b>ETH ETF</b> ({{datetime}})\n<strong>Günlük Net Giriş:</strong> {{description}}',
     identifier: 'usETH',
     waitForXPath: '//span[contains(text(), "Total Ethereum Spot ETF Net Inflow")]',
-    textXPath: '//button//span[contains(text(), "Daily Total Net Inflow")]/following-sibling::span' // XPath to get the daily inflow value for ETH
+    screenshotXPath: '//div[@class="flex-1 h-full transition-opacity"]' // Ekran görüntüsü alınacak ETH alanı
   }
 ];
 
@@ -72,17 +72,12 @@ function delay(ms) {
         await page.waitForTimeout(5000);
       }
 
-      // Belirli bir öğenin metnini al
-      let description = 'Metin alınamadı.';
+      // Ekran görüntüsü alınacak öğeyi bul ve ekran görüntüsünü al
       let elementScreenshotPath = '';
-      if (site.textXPath) {
+      if (site.screenshotXPath) {
         try {
-          const [element] = await page.$x(site.textXPath);
+          const [element] = await page.$x(site.screenshotXPath);
           if (element) {
-            description = await page.evaluate(el => el.textContent, element);
-            description = description.trim();
-            console.log(`Açıklama metni alındı: ${description}`);
-
             // Dinamik dosya adı oluştur
             const formattedDateTime = getFormattedDateTime();
             elementScreenshotPath = `element_screenshot_${site.identifier}_${formattedDateTime}.png`;
@@ -92,23 +87,16 @@ function delay(ms) {
             console.log(`Öğenin ekran görüntüsü alındı: ${elementScreenshotPath}`);
           }
         } catch (e) {
-          console.error(`Açıklama metni alınamadı veya öğe bulunamadı: ${e.message}`);
+          console.error(`Öğe bulunamadı: ${e.message}`);
         }
       }
-
-      // Her site için mesajı biriktir
-      const message = site.messageTemplate
-        .replace('{{datetime}}', new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }))
-        .replace('{{description}}', description);
-      
-      overallMessage += message + '\n\n';  // Tüm sayfalar için mesajları biriktir
 
       // Telegram'a gönderilecek form data
       if (elementScreenshotPath) {
         const formData = new FormData();
         formData.append('chat_id', TELEGRAM_CHAT_ID);
         formData.append('photo', fs.createReadStream(elementScreenshotPath));
-        formData.append('caption', message);
+        formData.append('caption', site.messageTemplate.replace('{{datetime}}', new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' })).replace('{{description}}', 'Ekran görüntüsü alındı.'));
         formData.append('parse_mode', 'HTML');
 
         // Ekran görüntüsünü Telegram'a gönder
@@ -140,29 +128,6 @@ function delay(ms) {
 
     if (site !== SITES[SITES.length - 1]) {
       await delay(10000);  // İki site arasında 10 saniye bekle
-    }
-  }
-
-  // Tüm sayfalar için toplanan mesajı Telegram'a gönder
-  if (overallMessage) {
-    const formData = new FormData();
-    formData.append('chat_id', TELEGRAM_CHAT_ID);
-    formData.append('text', overallMessage);
-    formData.append('parse_mode', 'HTML');
-
-    // Mesajı Telegram'a gönder
-    const response = await axios.post(
-      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
-      formData,
-      {
-        headers: formData.getHeaders(),
-      }
-    );
-
-    if (response.data.ok) {
-      console.log('Günlük net giriş mesajı başarıyla gönderildi.');
-    } else {
-      console.error('Telegram API hatası:', response.data);
     }
   }
 })();
