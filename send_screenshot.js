@@ -13,15 +13,17 @@ const SITES = [
     url: 'https://sosovalue.com/assets/etf/us-btc-spot',
     messageTemplate: '<b>BTC ETF</b> ({{datetime}})\n<strong>Günlük Net Giriş:</strong> {{description}}',
     identifier: 'usBTC',
-    waitForXPath: '//span[@class="max-w-[200px] truncate text-sm font-bold" and contains(text(), "US BTC Spot ETF")]',
-    textXPath: '//div[@class="text-[20px] font-bold flex items-center text-status-down"]'
+    waitForXPath: '//span[@class="text-neutral-fg-2-rest text-sm font-bold mr-1" and contains(text(), "Total Bitcoin Spot ETF Net Inflow")]',
+    boundingBoxSelector: 'div.px-3.flex.flex-col.relative.col-span-full.xl\\:col-span-1.h-block',
+    textXPath: '//span[@class="text-base font-bold text-neutral-fg-2-rest" and contains(text(), "-$18.66M")]' // Net Inflow text
   },
   {
     url: 'https://sosovalue.com/assets/etf/us-eth-spot',
     messageTemplate: '<b>ETH ETF</b> ({{datetime}})\n<strong>Günlük Net Giriş:</strong> {{description}}',
     identifier: 'usETH',
-    waitForXPath: '//span[@class="max-w-[200px] truncate text-sm font-bold" and contains(text(), "US ETH Spot ETF")]',
-    textXPath: '//div[@class="text-[20px] font-bold flex items-center text-status-up"]'
+    waitForXPath: '//span[@class="text-neutral-fg-2-rest text-sm font-bold mr-1" and contains(text(), "Total Ethereum Spot ETF Net Inflow")]',
+    boundingBoxSelector: 'div.px-3.flex.flex-col.relative.col-span-full.xl\\:col-span-1.h-block',
+    textXPath: '//span[@class="text-base font-bold text-neutral-fg-2-rest" and contains(text(), "-$8.19M")]' // Net Inflow text
   }
 ];
 
@@ -87,44 +89,52 @@ function delay(ms) {
         }
       }
 
-      // Tüm sayfanın ekran görüntüsünü al
-      const formattedDateTime = getFormattedDateTime();
-      const screenshotPath = `screenshot_${site.identifier}_${formattedDateTime}.png`;
-      
-      await page.screenshot({ path: screenshotPath, fullPage: true });
-      console.log(`Sayfanın tamamının ekran görüntüsü alındı: ${screenshotPath}`);
+      // Sadece belirlenen alanın ekran görüntüsünü al
+      const boundingBoxElement = await page.$(site.boundingBoxSelector);
+      if (boundingBoxElement) {
+        const boundingBox = await boundingBoxElement.boundingBox();
+        const formattedDateTime = getFormattedDateTime();
+        const screenshotPath = `partial_screenshot_${site.identifier}_${formattedDateTime}.png`;
 
-      // Her site için mesajı biriktir
-      const message = site.messageTemplate
-        .replace('{{datetime}}', new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }))
-        .replace('{{description}}', description);
-      
-      overallMessage += message + '\n\n';  // Tüm sayfalar için mesajları biriktir
+        await page.screenshot({ 
+          path: screenshotPath, 
+          clip: boundingBox 
+        });
 
-      // Telegram'a gönderilecek form data
-      const formData = new FormData();
-      formData.append('chat_id', TELEGRAM_CHAT_ID);
-      formData.append('photo', fs.createReadStream(screenshotPath));
-      formData.append('caption', message);
-      formData.append('parse_mode', 'HTML');
+        console.log(`Belirlenen alanın ekran görüntüsü alındı: ${screenshotPath}`);
 
-      // Ekran görüntüsünü Telegram'a gönder
-      const response = await axios.post(
-        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`,
-        formData,
-        {
-          headers: formData.getHeaders(),
+        // Her site için mesajı biriktir
+        const message = site.messageTemplate
+          .replace('{{datetime}}', new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }))
+          .replace('{{description}}', description);
+        
+        overallMessage += message + '\n\n';  // Tüm sayfalar için mesajları biriktir
+
+        // Telegram'a gönderilecek form data
+        const formData = new FormData();
+        formData.append('chat_id', TELEGRAM_CHAT_ID);
+        formData.append('photo', fs.createReadStream(screenshotPath));
+        formData.append('caption', message);
+        formData.append('parse_mode', 'HTML');
+
+        // Ekran görüntüsünü Telegram'a gönder
+        const response = await axios.post(
+          `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`,
+          formData,
+          {
+            headers: formData.getHeaders(),
+          }
+        );
+
+        if (response.data.ok) {
+          console.log(`Ekran görüntüsü başarıyla gönderildi: ${screenshotPath}`);
+        } else {
+          console.error('Telegram API hatası:', response.data);
         }
-      );
 
-      if (response.data.ok) {
-        console.log(`Ekran görüntüsü başarıyla gönderildi: ${screenshotPath}`);
-      } else {
-        console.error('Telegram API hatası:', response.data);
+        // Geçici dosyayı sil (isteğe bağlı)
+        fs.unlinkSync(screenshotPath);
       }
-
-      // Geçici dosyayı sil (isteğe bağlı)
-      fs.unlinkSync(screenshotPath);
 
     } catch (error) {
       console.error(`Hata oluştu: ${error.message}`);
