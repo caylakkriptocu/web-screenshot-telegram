@@ -46,6 +46,7 @@ function delay(ms) {
 }
 
 (async () => {
+  let overallMessage = '';  // Tüm sayfalar için net giriş verilerini toplamak için
   for (const site of SITES) {
     let browser;
     try {
@@ -71,18 +72,36 @@ function delay(ms) {
         await page.waitForTimeout(5000);
       }
 
-      // Tüm sayfanın ekran görüntüsünü al
-      const formattedDateTime = getFormattedDateTime();
-      const fullPageScreenshotPath = `full_page_screenshot_${site.identifier}_${formattedDateTime}.png`;
+      // Belirli bir öğenin metnini al
+      let description = 'Metin alınamadı.';
+      let elementScreenshotPath = '';
+      if (site.textXPath) {
+        try {
+          const [element] = await page.$x(site.textXPath);
+          if (element) {
+            description = await page.evaluate(el => el.textContent, element);
+            description = description.trim();
+            console.log(`Açıklama metni alındı: ${description}`);
 
-      await page.screenshot({ path: fullPageScreenshotPath, fullPage: true });
-      console.log(`Tüm sayfanın ekran görüntüsü alındı: ${fullPageScreenshotPath}`);
+            // Dinamik dosya adı oluştur
+            const formattedDateTime = getFormattedDateTime();
+            elementScreenshotPath = `element_screenshot_${site.identifier}_${formattedDateTime}.png`;
 
-       // Mesaj içeriğini oluştur
+            // Sadece öğenin ekran görüntüsünü al
+            await element.screenshot({ path: elementScreenshotPath });
+            console.log(`Öğenin ekran görüntüsü alındı: ${elementScreenshotPath}`);
+          }
+        } catch (e) {
+          console.error(`Açıklama metni alınamadı veya öğe bulunamadı: ${e.message}`);
+        }
+      }
+
+      // Her site için mesajı biriktir
       const message = site.messageTemplate
         .replace('{{datetime}}', new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }))
-        .replace('{{url}}', site.url)
         .replace('{{description}}', description);
+      
+      overallMessage += message + '\n\n';  // Tüm sayfalar için mesajları biriktir
 
       // Telegram'a gönderilecek form data
       if (elementScreenshotPath) {
@@ -94,7 +113,7 @@ function delay(ms) {
 
         // Ekran görüntüsünü Telegram'a gönder
         const response = await axios.post(
-          https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto,
+          `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`,
           formData,
           {
             headers: formData.getHeaders(),
@@ -102,13 +121,14 @@ function delay(ms) {
         );
 
         if (response.data.ok) {
-          console.log(Ekran görüntüsü başarıyla gönderildi: ${elementScreenshotPath});
+          console.log(`Ekran görüntüsü başarıyla gönderildi: ${elementScreenshotPath}`);
         } else {
           console.error('Telegram API hatası:', response.data);
         }
 
-      // Geçici dosyayı sil (isteğe bağlı)
-      fs.unlinkSync(fullPageScreenshotPath);
+        // Geçici dosyayı sil (isteğe bağlı)
+        fs.unlinkSync(elementScreenshotPath);
+      }
 
     } catch (error) {
       console.error(`Hata oluştu: ${error.message}`);
@@ -119,7 +139,30 @@ function delay(ms) {
     }
 
     if (site !== SITES[SITES.length - 1]) {
-      await delay(10000);
+      await delay(10000);  // İki site arasında 10 saniye bekle
+    }
+  }
+
+  // Tüm sayfalar için toplanan mesajı Telegram'a gönder
+  if (overallMessage) {
+    const formData = new FormData();
+    formData.append('chat_id', TELEGRAM_CHAT_ID);
+    formData.append('text', overallMessage);
+    formData.append('parse_mode', 'HTML');
+
+    // Mesajı Telegram'a gönder
+    const response = await axios.post(
+      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+      formData,
+      {
+        headers: formData.getHeaders(),
+      }
+    );
+
+    if (response.data.ok) {
+      console.log('Günlük net giriş mesajı başarıyla gönderildi.');
+    } else {
+      console.error('Telegram API hatası:', response.data);
     }
   }
 })();
