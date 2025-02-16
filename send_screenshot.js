@@ -1,13 +1,15 @@
-const puppeteer = require('puppeteer');
+const puppeteer = require('puppeteer-extra');
+const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const axios = require('axios');
 const fs = require('fs').promises;
 const FormData = require('form-data');
+
+puppeteer.use(StealthPlugin());
 
 // Retrieve Telegram credentials from environment variables
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
-// Validate environment variables
 if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
   console.error('Error: TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be set in environment variables.');
   process.exit(1);
@@ -29,40 +31,46 @@ const SITES = [
   }
 ];
 
-// Generate a formatted date-time string
 function getFormattedDateTime() {
   const date = new Date();
   return date.toISOString().replace(/[:.]/g, '-');
 }
 
-// Delay function
 function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// Cloudflare doğrulamasını geçme fonksiyonu
+// Cloudflare korumasını geçme fonksiyonu
 async function bypassCloudflare(page) {
-    try {
-        // Cloudflare doğrulama kutusunu bul ve tıkla
-        const [captcha] = await page.$x('//input[@type="checkbox"]');
-        if (captcha) {
-            await captcha.click();
-            console.log('Cloudflare doğrulaması başlatıldı...');
-            await page.waitForTimeout(5000); // Doğrulamanın tamamlanması için bekle
-        } else {
-            console.log('Cloudflare doğrulaması gerekmiyor.');
-        }
-    } catch (e) {
-        console.error('Cloudflare doğrulama sürecinde hata oluştu:', e.message);
+  try {
+    console.log('Cloudflare doğrulaması bekleniyor...');
+    await page.waitForSelector('input[type="checkbox"]', { timeout: 10000 });
+    
+    // Checkbox varsa tıkla
+    const checkbox = await page.$('input[type="checkbox"]');
+    if (checkbox) {
+      await checkbox.click();
+      console.log('Cloudflare doğrulama kutusu tıklandı.');
+      await delay(5000); // CAPTCHA çözülmesi için bekle
     }
+
+    // Sayfa tam yüklendi mi kontrol et
+    await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 20000 });
+  } catch (e) {
+    console.warn('Cloudflare doğrulama sürecinde hata:', e.message);
+  }
 }
 
 (async () => {
   let browser;
   try {
     browser = await puppeteer.launch({
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      // headless: true, // Ensure headless is true for production
+      headless: false, // Görsel CAPTCHA çıkarsa elle çözebilmen için headless mod kapalı
+      args: [
+        '--no-sandbox', 
+        '--disable-setuid-sandbox', 
+        '--disable-blink-features=AutomationControlled'
+      ]
     });
 
     for (const site of SITES) {
