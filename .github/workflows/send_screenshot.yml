@@ -17,10 +17,13 @@ jobs:
       - name: Node.js Kurulumu
         uses: actions/setup-node@v3
         with:
-          node-version: '16'
+          node-version: '18'
 
       - name: Bağımlılıkları Yükle
-        run: npm install
+        run: |
+          npm install puppeteer-extra
+          npm install puppeteer-extra-plugin-stealth
+          npm install
 
       - name: Script'i Çalıştır
         env:
