@@ -17,22 +17,26 @@ if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
 const SITE_URL = 'https://sosovalue.com/assets/etf/us-btc-spot';
 const SCREENSHOT_PATH = 'screenshot.png';
 
-// Cloudflare doğrulamasını geçme fonksiyonu
+// **Cloudflare doğrulamasını geçme fonksiyonu**
 async function bypassCloudflare(page) {
   try {
-    console.log('Cloudflare doğrulaması bekleniyor...');
-    await page.waitForSelector('input[type="checkbox"]', { timeout: 10000 });
-
+    console.log('✅ Cloudflare doğrulama sayfası bekleniyor...');
+    
+    // **Cloudflare doğrulama kutusu çıkarsa tıkla**
+    await page.waitForSelector('input[type="checkbox"]', { timeout: 15000 });
     const checkbox = await page.$('input[type="checkbox"]');
+
     if (checkbox) {
       await checkbox.click();
-      console.log('Cloudflare doğrulama kutusu tıklandı.');
-      await page.waitForTimeout(5000);
+      console.log('☑️ Cloudflare doğrulama kutusu tıklandı.');
     }
 
-    await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 20000 });
+    // **Sayfanın tam yüklendiğini bekle**
+    await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 });
+    console.log('✅ Cloudflare doğrulaması geçildi.');
+
   } catch (e) {
-    console.warn('Cloudflare doğrulama sürecinde hata:', e.message);
+    console.warn('⚠️ Cloudflare doğrulama sürecinde hata:', e.message);
   }
 }
 
@@ -40,25 +44,27 @@ async function bypassCloudflare(page) {
   let browser;
   try {
     browser = await puppeteer.launch({
-      headless: true,
+      headless: false,  // **Eğer manuel CAPTCHA çıkarsa elle çözebilmen için headless:false**
       args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
 
     const page = await browser.newPage();
     await page.goto(SITE_URL, { waitUntil: 'networkidle2', timeout: 60000 });
 
+    // **Cloudflare doğrulamasını geç**
     await bypassCloudflare(page);
 
+    // **Sayfa yüklendikten sonra ekran görüntüsü al**
     await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
-    console.log(`Screenshot saved: ${SCREENSHOT_PATH}`);
+    console.log(`📸 Screenshot kaydedildi: ${SCREENSHOT_PATH}`);
 
     await browser.close();
 
-    // Telegram'a mesaj gönderme
+    // **Telegram’a mesaj gönderme**
     const formData = new FormData();
     formData.append('chat_id', TELEGRAM_CHAT_ID);
     formData.append('photo', await fs.readFile(SCREENSHOT_PATH), SCREENSHOT_PATH);
-    formData.append('caption', 'Günlük ETF Ekran Görüntüsü');
+    formData.append('caption', '📊 Günlük ETF Ekran Görüntüsü');
     formData.append('parse_mode', 'HTML');
 
     const response = await axios.post(
@@ -67,7 +73,7 @@ async function bypassCloudflare(page) {
       { headers: formData.getHeaders() }
     );
 
-    // ✅ **Telegram API Yanıtını Logla!**
+    // **Telegram API yanıtını logla**
     console.log('📩 Telegram API Yanıtı:', response.data);
 
     if (response.data.ok) {
