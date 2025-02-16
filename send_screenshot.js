@@ -3,7 +3,7 @@ const axios = require('axios');
 const fs = require('fs').promises;
 const FormData = require('form-data');
 
-// Çevresel değişkenlerden Token ve Chat ID okunuyor
+// Çevre değişkenlerden Token ve Chat ID al
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
@@ -15,44 +15,42 @@ if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
 // 1) Para birimini USD'ye çevirmek için menü tıklama fonksiyonu
 async function setCurrencyToUSD(page) {
   try {
-    console.log('Para birimi menüsü açılıyor...');
-    // **Menü ikonu** (avatar / dropdown açan buton) için kullandığınız class
-    // Örneğin: ".BasePopover_base__T5yOf.popover-base"
-    // Mevcut coinmarketcap TR ana sayfasında kullanıcı menüsü ikonunu bekleyelim.
-    await page.waitForSelector('.BasePopover_base__T5yOf.popover-base', { timeout: 15000 });
-    await page.click('.BasePopover_base__T5yOf.popover-base');
-    console.log('Menü açıldı.');
+    // Menüde "TRY" yazan kısım: .GlobalFunction_currency-picker__n01zm
+    // Bazen bu element gecikebilir, bekleme süresini artır
+    console.log('Para birimi menüsü bekleniyor...');
+    await page.waitForSelector('.GlobalFunction_currency-picker__n01zm', { timeout: 20000 });
+    
+    // Öncesinde debug screenshot alıp menünün görünüp görünmediğine bakabilirsin
+    // await page.screenshot({ path: 'debug_before_click.png' });
 
-    // "Para Birimi" yazan seçeneği tıkla
-    // .UserDropdownItem_user-dropdown-item__SyxAi içinde "Para Birimi" metnini arıyoruz
-    await page.waitForSelector('.UserDropdownItem_user-dropdown-item__SyxAi', { timeout: 10000 });
-    await page.evaluate(() => {
-      const items = document.querySelectorAll('.UserDropdownItem_user-dropdown-item__SyxAi');
-      for (const item of items) {
-        if (item.innerText.includes('Para Birimi')) {
-          item.click();
-          break;
-        }
-      }
-    });
-    console.log('"Para Birimi" menüsü tıklandı.');
+    console.log('Para birimi menüsü tıklanıyor (TRY) ...');
+    await page.click('.GlobalFunction_currency-picker__n01zm');
 
-    // Açılan modalda "United States Dollar" seç
-    // .IntlConfigModal_item-name__kvwL9 => "United States Dollar"
-    await page.waitForSelector('.IntlConfigModal_item-name__kvwL9', { timeout: 10000 });
-    await page.evaluate(() => {
+    // Şimdi açılan modalda "United States Dollar" seçeneğini bulalım
+    // Bu class: .IntlConfigModal_item-name__kvwL9
+    // Tek tek bakıp "United States Dollar" içereni tıklayacağız
+    console.log('USD seçeneği bekleniyor...');
+    await page.waitForSelector('.IntlConfigModal_item-name__kvwL9', { timeout: 20000 });
+
+    // Tek tek öğeleri dolaş
+    const usdClicked = await page.evaluate(() => {
       const items = document.querySelectorAll('.IntlConfigModal_item-name__kvwL9');
       for (const item of items) {
         if (item.innerText.includes('United States Dollar')) {
           item.click();
-          break;
+          return true; // Bulduk ve tıkladık
         }
       }
+      return false; // Bulamadık
     });
-    console.log('Para birimi "USD" seçildi.');
 
-    // Seçim sonrası ufak bir bekleme
-    await page.waitForTimeout(3000);
+    if (usdClicked) {
+      console.log('Para birimi "USD" seçildi.');
+      // Seçim sonrası ufak bir bekleme
+      await page.waitForTimeout(3000);
+    } else {
+      console.warn('Menüde "United States Dollar" bulunamadı!');
+    }
 
   } catch (error) {
     console.warn('Para birimi USD olarak ayarlanırken hata oluştu:', error.message);
@@ -77,13 +75,13 @@ const SITES = [
   }
 ];
 
-// Dosya ismi için tarih
+// Tarih format (dosya ismi için)
 function getFormattedDateTime() {
   const date = new Date();
   return date.toISOString().replace(/[:.]/g, '-'); 
 }
 
-// Ufak bekletme
+// Ufak bekleme
 function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -91,26 +89,27 @@ function delay(ms) {
 (async () => {
   let browser;
   try {
-    // **HEADLESS: true** => X server gerektirmeden çalışır
+    // Menü tıklamalarını görebilmek için headless: false
+    // Headless: true olursa bazen elementler farklı davranabiliyor
     browser = await puppeteer.launch({
-      headless: true,
+      headless: false,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox'
       ]
     });
 
-    // 1) Ana sayfa açılır, USD'ye geçilir
+    // 1) Ana sayfa aç
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 800 });
 
-    console.log('Ana sayfaya gidiliyor...');
+    console.log('Ana sayfaya gidiliyor (coinmarketcap.com/tr) ...');
     await page.goto('https://coinmarketcap.com/tr/', { waitUntil: 'networkidle2', timeout: 60000 });
 
-    // Para birimini USD'ye ayarla
+    // 2) Para birimini USD yap
     await setCurrencyToUSD(page);
 
-    // 2) Ardından ETF sayfalarını ziyaret et
+    // 3) ETF sayfaları
     for (const site of SITES) {
       const sitePage = await browser.newPage();
       await sitePage.setViewport({ width: 1280, height: 800 });
@@ -127,7 +126,7 @@ function delay(ms) {
       let extractedDate = 'Bilinmiyor';
       let netFlow = 'Bilinmiyor';
 
-      // Verileri çek
+      // Gerekli verileri çek
       try {
         const dateEl = await sitePage.$(site.dateSelector);
         if (dateEl) {
@@ -162,7 +161,7 @@ function delay(ms) {
         .replace('{{date}}', extractedDate)
         .replace('{{netFlow}}', netFlow);
 
-      // Fotoğrafı form-data'ya ekle
+      // Fotoğrafı form-data'ya ekleyip gönder
       const formData = new FormData();
       formData.append('chat_id', TELEGRAM_CHAT_ID);
       formData.append('photo', await fs.readFile(screenshotPath), screenshotPath);
@@ -196,7 +195,6 @@ function delay(ms) {
       await delay(2000);
     }
 
-    // Ana sayfayı kapat
     await page.close();
 
   } catch (err) {
