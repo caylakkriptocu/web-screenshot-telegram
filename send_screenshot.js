@@ -1,155 +1,163 @@
-const puppeteer = require('puppeteer-extra');
-const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+const puppeteer = require('puppeteer');
 const axios = require('axios');
 const fs = require('fs').promises;
 const FormData = require('form-data');
 
-// Stealth mod etkinleştir
-puppeteer.use(StealthPlugin());
-
+// Çevresel değişkenlerden Token ve Chat ID okunuyor
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
 if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
-  console.error('Error: TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be set.');
+  console.error('Error: TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be set in environment variables.');
   process.exit(1);
 }
 
+// Monitor etmek istediğimiz siteler
 const SITES = [
   {
-    url: 'https://sosovalue.com/assets/etf/us-btc-spot',
-    messageTemplate: '<b>BTC ETF</b> ({{datetime}}) <b>\nGÜNLÜK NET GİRİŞ:</b> {{netFlow}}',
-    identifier: 'usBTC',
-    netFlowXPath: '//div[contains(@class, "text-[20px] font-bold flex items-center text-status")]'
+    url: 'https://coinmarketcap.com/etf/bitcoin/',
+    messageTemplate: '<b>Bitcoin ETF</b> ({{date}}) <b>\nGÜNLÜK NET GİRİŞ:</b> {{netFlow}}',
+    identifier: 'btcETF',
+    netFlowSelector: 'span.sc-65e7f566-0.eSPIPM.base-text', // Net Flow'un bulunduğu span
+    dateSelector: 'span.sc-65e7f566-0.kxhcgF.base-text'      // Tarihin bulunduğu span
   },
   {
-    url: 'https://sosovalue.com/assets/etf/us-eth-spot',
-    messageTemplate: '<b>ETH ETF</b> ({{datetime}}) <b>\nGÜNLÜK NET GİRİŞ:</b> {{netFlow}}',
-    identifier: 'usETH',
-    netFlowXPath: '//div[contains(@class, "text-[20px] font-bold flex items-center text-status")]'
+    url: 'https://coinmarketcap.com/etf/ethereum/',
+    messageTemplate: '<b>Ethereum ETF</b> ({{date}}) <b>\nGÜNLÜK NET GİRİŞ:</b> {{netFlow}}',
+    identifier: 'ethETF',
+    netFlowSelector: 'span.sc-65e7f566-0.eSPIPM.base-text', // Net Flow'un bulunduğu span
+    dateSelector: 'span.sc-65e7f566-0.kxhcgF.base-text'      // Tarihin bulunduğu span
   }
 ];
 
+// Tarih biçimlendirme (dosya ismi için)
 function getFormattedDateTime() {
   const date = new Date();
-  return date.toISOString().replace(/[:.]/g, '-');
+  return date.toISOString().replace(/[:.]/g, '-'); // 2025-02-14T14-05-00-000Z
 }
 
+// Bekleme fonksiyonu
 function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-async function bypassCloudflare(page) {
-  try {
-    // Cloudflare "checkbox" kontrolü
-    await page.waitForSelector('input[type="checkbox"]', { timeout: 15000 });
-    const checkbox = await page.$('input[type="checkbox"]');
-    if (checkbox) {
-      await checkbox.click();
-      console.log('Cloudflare checkbox tıklandı, bekleniyor...');
-      await delay(5000);
-    }
-    // Turnstile/JS kontrolü varsa da bekle
-  } catch (e) {
-    console.log('Checkbox bulunamadı veya zaman aşımı:', e.message);
-  }
 }
 
 (async () => {
   let browser;
   try {
+    // Puppeteer başlat
     browser = await puppeteer.launch({
-      headless: false,  // Görsel CAPTCHA çıkarsa manuel geçmek için
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-blink-features=AutomationControlled'
-      ]
+      // Eğer istiyorsan otomatik kapatılmasın ve sayfayı gör:
+      // headless: false,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
 
-    const page = await browser.newPage();
-
-    // Gelişmiş bir User-Agent kullan
-    await page.setUserAgent(
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
-      '(KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36'
-    );
-
-    // Her site için sırayla işlemleri yap
     for (const site of SITES) {
+      const page = await browser.newPage();
       await page.setViewport({ width: 1280, height: 800 });
+
       try {
-        console.log(`Navigating to ${site.url} ...`);
+        // Sayfaya git
         await page.goto(site.url, { waitUntil: 'networkidle2', timeout: 60000 });
-        // Cloudflare kontrolünü dene
-        await bypassCloudflare(page);
       } catch (err) {
-        console.error(`Sayfaya gidilemedi ${site.url}: ${err.message}`);
+        console.error(`Failed to navigate to ${site.url}: ${err.message}`);
+        await page.close();
+        continue; // Sonraki siteye geç
+      }
+
+      // Tarih ve Net Flow değerlerini DOM'dan çek
+      let extractedDate = 'Bilinmiyor';
+      let netFlow = 'Bilinmiyor';
+
+      try {
+        // Tarih çek
+        const dateElement = await page.$(site.dateSelector);
+        if (dateElement) {
+          extractedDate = await page.evaluate(el => el.textContent.trim(), dateElement);
+          console.log(`Tarih bulundu: ${extractedDate}`);
+        } else {
+          console.warn('Tarih elementi bulunamadı.');
+        }
+
+        // Net Flow çek
+        const netFlowElement = await page.$(site.netFlowSelector);
+        if (netFlowElement) {
+          netFlow = await page.evaluate(el => el.textContent.trim(), netFlowElement);
+          console.log(`Net Flow bulundu: ${netFlow}`);
+        } else {
+          console.warn('Net Flow elementi bulunamadı.');
+        }
+      } catch (e) {
+        console.error(`Bilgileri çekerken hata oluştu: ${e.message}`);
+      }
+
+      // Ekran görüntüsü dosya adı oluştur
+      const formattedDateTime = getFormattedDateTime();
+      const SCREENSHOT_PATH = `screenshot_${site.identifier}_${formattedDateTime}.png`;
+
+      // Ekran görüntüsü al
+      try {
+        await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
+        console.log(`Screenshot kaydedildi: ${SCREENSHOT_PATH}`);
+      } catch (err) {
+        console.error(`Screenshot alma hatası: ${err.message}`);
+        await page.close();
         continue;
       }
 
-      // Manuel CAPTCHA geliyorsa headless:false ekranda görünecektir
-      // Bu noktada elle çözmemiz gerekebilir!
+      await page.close();
 
-      // netFlow değeri
-      let netFlow = 'Bilinmiyor';
+      // Telegram'a gönderilecek mesaj
+      const message = site.messageTemplate
+        .replace('{{date}}', extractedDate)
+        .replace('{{netFlow}}', netFlow);
+
+      // Telegram'a gönderim
+      const formData = new FormData();
+      formData.append('chat_id', TELEGRAM_CHAT_ID);
+      formData.append('photo', await fs.readFile(SCREENSHOT_PATH), SCREENSHOT_PATH);
+      formData.append('caption', message);
+      formData.append('parse_mode', 'HTML');
+
       try {
-        const [element] = await page.$x(site.netFlowXPath);
-        if (element) {
-          netFlow = await page.evaluate(el => el.textContent, element);
-          console.log(`Net Flow for ${site.identifier}: ${netFlow}`);
-        } else {
-          console.error(`Net Flow element not found for ${site.identifier}`);
-        }
-      } catch (err) {
-        console.error(`Net flow çekilemedi: ${err.message}`);
-      }
-
-      // Ekran görüntüsü al
-      const screenshotPath = `screenshot_${site.identifier}_${getFormattedDateTime()}.png`;
-      try {
-        await page.screenshot({ path: screenshotPath, fullPage: true });
-        console.log(`Screenshot taken: ${screenshotPath}`);
-
-        // Telegram'a gönder
-        const message = site.messageTemplate
-          .replace('{{datetime}}', new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }))
-          .replace('{{netFlow}}', netFlow);
-
-        const formData = new FormData();
-        formData.append('chat_id', TELEGRAM_CHAT_ID);
-        formData.append('photo', await fs.readFile(screenshotPath), screenshotPath);
-        formData.append('caption', message);
-        formData.append('parse_mode', 'HTML');
-
         const response = await axios.post(
           `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`,
           formData,
-          { headers: formData.getHeaders() }
+          {
+            headers: formData.getHeaders(),
+            maxContentLength: Infinity,
+            maxBodyLength: Infinity
+          }
         );
 
-        console.log('Telegram yanıtı:', response.data);
         if (response.data.ok) {
-          console.log(`Screenshot sent to Telegram: ${screenshotPath}`);
+          console.log(`Telegram'a gönderildi: ${SCREENSHOT_PATH}`);
         } else {
-          console.error(`Telegram API error:`, response.data);
+          console.error(`Telegram API Hatası:`, response.data);
         }
-
-        // Ekran görüntüsünü sil
-        await fs.unlink(screenshotPath);
       } catch (err) {
-        console.error(`Screenshot/Telegram aşamasında hata: ${err.message}`);
+        console.error(`Telegram'a gönderim hatası: ${err.message}`);
       }
 
-      // Bir sonraki siteye geçmeden önce ufak bir bekleme
-      await delay(5000);
-    }
+      // Ekran görüntüsü dosyasını sil
+      try {
+        await fs.unlink(SCREENSHOT_PATH);
+        console.log(`Screenshot dosyası silindi: ${SCREENSHOT_PATH}`);
+      } catch (err) {
+        console.error(`Screenshot silme hatası: ${err.message}`);
+      }
 
-    await browser.close();
+      // Sonraki siteye geçmeden önce kısa bir bekleme (opsiyonel)
+      if (site !== SITES[SITES.length - 1]) {
+        console.log('Bir sonraki siteye geçmeden 5 saniye bekleniyor...');
+        await delay(5000);
+      }
+    }
   } catch (err) {
-    console.error('Genel hata:', err.message);
+    console.error(`Beklenmeyen hata: ${err.message}`);
+  } finally {
     if (browser) {
       await browser.close();
     }
+    console.log('Tarayıcı kapatıldı. Script bitti.');
   }
 })();
