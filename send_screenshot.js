@@ -3,17 +3,14 @@ const axios = require('axios');
 const fs = require('fs').promises;
 const FormData = require('form-data');
 
-// Retrieve Telegram credentials from environment variables
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
-// Validate environment variables
 if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
   console.error('Error: TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be set in environment variables.');
   process.exit(1);
 }
 
-// URLs to monitor and their configurations
 const SITES = [
   {
     url: 'https://sosovalue.com/assets/etf/us-btc-spot',
@@ -29,13 +26,11 @@ const SITES = [
   }
 ];
 
-// Generate a formatted date-time string
 function getFormattedDateTime() {
   const date = new Date();
-  return date.toISOString().replace(/[:.]/g, '-'); // e.g., 2023-04-05T14-30-00-000Z
+  return date.toISOString().replace(/[:.]/g, '-');
 }
 
-// Delay function
 function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -43,10 +38,9 @@ function delay(ms) {
 (async () => {
   let browser;
   try {
-    // Launch Puppeteer browser once
     browser = await puppeteer.launch({
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      // headless: true, // Ensure headless is true for production
+      headless: false, // Eğer manuel doğrulama gerekirse headless:false kullan
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
 
     for (const site of SITES) {
@@ -58,10 +52,24 @@ function delay(ms) {
       } catch (err) {
         console.error(`Failed to navigate to ${site.url}: ${err.message}`);
         await page.close();
-        continue; // Skip to the next site
+        continue;
       }
 
-      // Extract the GÜNLÜK NET GİRİŞ value
+      // **Cloudflare doğrulama kutusunu bul ve tıkla**
+      try {
+        const [captcha] = await page.$x('//input[@type="checkbox"]');
+        if (captcha) {
+          await captcha.click();
+          console.log('Cloudflare doğrulaması başlatıldı...');
+          await delay(5000); // Doğrulamanın tamamlanması için bekle
+        } else {
+          console.log('Cloudflare doğrulaması gerekmiyor.');
+        }
+      } catch (e) {
+        console.error('Cloudflare doğrulama sürecinde hata oluştu:', e.message);
+      }
+
+      // **GÜNLÜK NET GİRİŞ değerini çek**
       let netFlow;
       try {
         const [element] = await page.$x(site.netFlowXPath);
@@ -77,11 +85,9 @@ function delay(ms) {
         netFlow = 'Bilinmiyor';
       }
 
-      // Generate screenshot path
       const formattedDateTime = getFormattedDateTime();
       const SCREENSHOT_PATH = `screenshot_${site.identifier}_${formattedDateTime}.png`;
 
-      // Take screenshot
       try {
         await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
         console.log(`Screenshot taken: ${SCREENSHOT_PATH}`);
@@ -93,19 +99,16 @@ function delay(ms) {
 
       await page.close();
 
-      // Prepare the message
       const message = site.messageTemplate
         .replace('{{datetime}}', new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }))
         .replace('{{netFlow}}', netFlow);
 
-      // Prepare form data for sending screenshot and message
       const formData = new FormData();
       formData.append('chat_id', TELEGRAM_CHAT_ID);
       formData.append('photo', await fs.readFile(SCREENSHOT_PATH), SCREENSHOT_PATH);
       formData.append('caption', message);
       formData.append('parse_mode', 'HTML');
 
-      // Send the screenshot and message to Telegram
       try {
         const response = await axios.post(
           `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`,
@@ -126,7 +129,6 @@ function delay(ms) {
         console.error(`Failed to send screenshot to Telegram for ${site.identifier}: ${err.message}`);
       }
 
-      // Delete the screenshot file
       try {
         await fs.unlink(SCREENSHOT_PATH);
         console.log(`Deleted screenshot file: ${SCREENSHOT_PATH}`);
@@ -134,7 +136,6 @@ function delay(ms) {
         console.error(`Failed to delete screenshot file ${SCREENSHOT_PATH}: ${err.message}`);
       }
 
-      // Delay before processing the next site
       if (site !== SITES[SITES.length - 1]) {
         console.log('Waiting for 10 seconds before processing the next site...');
         await delay(10000);
