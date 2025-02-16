@@ -10,14 +10,14 @@ const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 // Örnek site listesi
 const SITES = [
   {
-    url: 'https://coinmarketcap.com/etf/bitcoin/',
+    url: 'https://coinmarketcap.com/tr/etf/bitcoin/',
     messageTemplate: '<b>Bitcoin ETF</b> ({{date}}) <b>\nGÜNLÜK NET GİRİŞ:</b> {{netFlow}}',
     identifier: 'btcETF',
     netFlowSelector: 'span.sc-65e7f566-0.eSPIPM.base-text',
     dateSelector: 'span.sc-65e7f566-0.kxhcgF.base-text'
   },
   {
-    url: 'https://coinmarketcap.com/etf/ethereum/',
+    url: 'https://coinmarketcap.com/tr/etf/ethereum/',
     messageTemplate: '<b>Ethereum ETF</b> ({{date}}) <b>\nGÜNLÜK NET GİRİŞ:</b> {{netFlow}}',
     identifier: 'ethETF',
     netFlowSelector: 'span.sc-65e7f566-0.eSPIPM.base-text',
