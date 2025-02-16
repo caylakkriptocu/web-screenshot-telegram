@@ -1,90 +1,176 @@
-const puppeteer = require('puppeteer-extra');
-const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+const puppeteer = require('puppeteer');
 const axios = require('axios');
 const fs = require('fs').promises;
 const FormData = require('form-data');
 
-puppeteer.use(StealthPlugin());
-
+// Retrieve Telegram credentials from environment variables
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
+// Validate environment variables
 if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
   console.error('Error: TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be set in environment variables.');
   process.exit(1);
 }
 
-const SITE_URL = 'https://sosovalue.com/assets/etf/us-btc-spot';
-const SCREENSHOT_PATH = 'screenshot.png';
+// URLs to monitor and their configurations
+const SITES = [
+  {
+    url: 'https://sosovalue.com/assets/etf/us-btc-spot',
+    messageTemplate: '<b>BTC ETF</b> ({{datetime}}) <b>\nGÜNLÜK NET GİRİŞ:</b> {{netFlow}}',
+    identifier: 'usBTC',
+    netFlowXPath: '//div[contains(@class, "text-[20px] font-bold flex items-center text-status")]'
+  },
+  {
+    url: 'https://sosovalue.com/assets/etf/us-eth-spot',
+    messageTemplate: '<b>ETH ETF</b> ({{datetime}}) <b>\nGÜNLÜK NET GİRİŞ:</b> {{netFlow}}',
+    identifier: 'usETH',
+    netFlowXPath: '//div[contains(@class, "text-[20px] font-bold flex items-center text-status")]'
+  }
+];
 
-// **Cloudflare doğrulamasını geçme fonksiyonu**
+// Generate a formatted date-time string
+function getFormattedDateTime() {
+  const date = new Date();
+  return date.toISOString().replace(/[:.]/g, '-'); // e.g., 2023-04-05T14-30-00-000Z
+}
+
+// Delay function
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Cloudflare doğrulamasını otomatik geçmeye çalış
 async function bypassCloudflare(page) {
   try {
-    console.log('✅ Cloudflare doğrulama sayfası bekleniyor...');
-    
-    // **Cloudflare doğrulama kutusu çıkarsa tıkla**
-    await page.waitForSelector('input[type="checkbox"]', { timeout: 15000 });
+    // "Gerçek kişi olduğunuzu doğrulayın" kutusunu bekle
+    await page.waitForSelector('input[type="checkbox"]', { timeout: 10000 });
     const checkbox = await page.$('input[type="checkbox"]');
 
     if (checkbox) {
-      await checkbox.click();
-      console.log('☑️ Cloudflare doğrulama kutusu tıklandı.');
+      await checkbox.click(); // Checkbox'a tıkla
+      console.log('Cloudflare doğrulama kutusu tıklandı. Bekleniyor...');
+      // Doğrulama tamamlanması için biraz bekle
+      await delay(5000);
+    } else {
+      console.log('Cloudflare doğrulaması görünmüyor.');
     }
-
-    // **Sayfanın tam yüklendiğini bekle**
-    await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 });
-    console.log('✅ Cloudflare doğrulaması geçildi.');
-
-  } catch (e) {
-    console.warn('⚠️ Cloudflare doğrulama sürecinde hata:', e.message);
+  } catch (err) {
+    // Checkbox bulunamazsa veya süre aşarsa buraya düşer
+    console.warn('Cloudflare doğrulaması atlanıyor veya bulunamadı:', err.message);
   }
 }
 
 (async () => {
   let browser;
   try {
+    // Launch Puppeteer browser once
     browser = await puppeteer.launch({
-      headless: false,  // **Eğer manuel CAPTCHA çıkarsa elle çözebilmen için headless:false**
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      // headless: true, // Eğer manuel müdahale gerekiyorsa false yap
     });
 
-    const page = await browser.newPage();
-    await page.goto(SITE_URL, { waitUntil: 'networkidle2', timeout: 60000 });
+    for (const site of SITES) {
+      const page = await browser.newPage();
+      await page.setViewport({ width: 1280, height: 800 });
 
-    // **Cloudflare doğrulamasını geç**
-    await bypassCloudflare(page);
+      try {
+        // Sayfaya git
+        await page.goto(site.url, { waitUntil: 'networkidle2', timeout: 60000 });
 
-    // **Sayfa yüklendikten sonra ekran görüntüsü al**
-    await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
-    console.log(`📸 Screenshot kaydedildi: ${SCREENSHOT_PATH}`);
+        // Cloudflare doğrulamasını otomatik geçmeye çalış
+        await bypassCloudflare(page);
+      } catch (err) {
+        console.error(`Failed to navigate to ${site.url}: ${err.message}`);
+        await page.close();
+        continue; // Skip to the next site
+      }
 
-    await browser.close();
+      // Extract the GÜNLÜK NET GİRİŞ value
+      let netFlow;
+      try {
+        const [element] = await page.$x(site.netFlowXPath);
+        if (element) {
+          netFlow = await page.evaluate(el => el.textContent, element);
+          console.log(`Net Flow found for ${site.identifier}: ${netFlow}`);
+        } else {
+          console.error(`Net Flow element not found for ${site.identifier}`);
+          netFlow = 'Bilinmiyor';
+        }
+      } catch (e) {
+        console.error(`Failed to extract net flow for ${site.identifier}: ${e.message}`);
+        netFlow = 'Bilinmiyor';
+      }
 
-    // **Telegram’a mesaj gönderme**
-    const formData = new FormData();
-    formData.append('chat_id', TELEGRAM_CHAT_ID);
-    formData.append('photo', await fs.readFile(SCREENSHOT_PATH), SCREENSHOT_PATH);
-    formData.append('caption', '📊 Günlük ETF Ekran Görüntüsü');
-    formData.append('parse_mode', 'HTML');
+      // Generate screenshot path
+      const formattedDateTime = getFormattedDateTime();
+      const SCREENSHOT_PATH = `screenshot_${site.identifier}_${formattedDateTime}.png`;
 
-    const response = await axios.post(
-      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`,
-      formData,
-      { headers: formData.getHeaders() }
-    );
+      // Take screenshot
+      try {
+        await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
+        console.log(`Screenshot taken: ${SCREENSHOT_PATH}`);
+      } catch (err) {
+        console.error(`Failed to take screenshot for ${site.identifier}: ${err.message}`);
+        await page.close();
+        continue;
+      }
 
-    // **Telegram API yanıtını logla**
-    console.log('📩 Telegram API Yanıtı:', response.data);
+      await page.close();
 
-    if (response.data.ok) {
-      console.log('✅ Screenshot Telegram’a gönderildi.');
-    } else {
-      console.error('❌ Telegram API Hatası:', response.data);
+      // Prepare the message
+      const message = site.messageTemplate
+        .replace('{{datetime}}', new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }))
+        .replace('{{netFlow}}', netFlow);
+
+      // Prepare form data for sending screenshot and message
+      const formData = new FormData();
+      formData.append('chat_id', TELEGRAM_CHAT_ID);
+      formData.append('photo', await fs.readFile(SCREENSHOT_PATH), SCREENSHOT_PATH);
+      formData.append('caption', message);
+      formData.append('parse_mode', 'HTML');
+
+      // Send the screenshot and message to Telegram
+      try {
+        const response = await axios.post(
+          `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`,
+          formData,
+          {
+            headers: formData.getHeaders(),
+            maxContentLength: Infinity,
+            maxBodyLength: Infinity
+          }
+        );
+
+        if (response.data.ok) {
+          console.log(`Screenshot sent to Telegram: ${SCREENSHOT_PATH}`);
+        } else {
+          console.error(`Telegram API error for ${site.identifier}:`, response.data);
+        }
+      } catch (err) {
+        console.error(`Failed to send screenshot to Telegram for ${site.identifier}: ${err.message}`);
+      }
+
+      // Delete the screenshot file
+      try {
+        await fs.unlink(SCREENSHOT_PATH);
+        console.log(`Deleted screenshot file: ${SCREENSHOT_PATH}`);
+      } catch (err) {
+        console.error(`Failed to delete screenshot file ${SCREENSHOT_PATH}: ${err.message}`);
+      }
+
+      // Delay before processing the next site
+      if (site !== SITES[SITES.length - 1]) {
+        console.log('Waiting for 10 seconds before processing the next site...');
+        await delay(10000);
+      }
     }
-
-    await fs.unlink(SCREENSHOT_PATH);
-    console.log('🗑 Screenshot dosyası silindi.');
   } catch (err) {
-    console.error(`🚨 Beklenmeyen hata: ${err.message}`);
+    console.error(`Unexpected error: ${err.message}`);
+  } finally {
+    if (browser) {
+      await browser.close();
+    }
+    console.log('Browser closed. Script finished.');
   }
 })();
